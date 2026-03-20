@@ -1,4 +1,12 @@
+import mongoose from "mongoose";
+import counterModel from "./counter.model.js";
+
 const walletTransactionSchema = new mongoose.Schema({
+    walletId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Wallet",
+        required: true
+    },
     ownerId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
@@ -11,7 +19,7 @@ const walletTransactionSchema = new mongoose.Schema({
     },
     type: {
         type: String,
-        enum: ["credit", "debit", "lock", "unlock", "settlement", "refund", "commission", "withdrawal"],
+        enum: ["credit", "debit", "lock", "top-up", "unlock", "settlement", "refund", "commission", "withdrawal"],
         required: true
     },
 
@@ -29,11 +37,7 @@ const walletTransactionSchema = new mongoose.Schema({
 
     description: {
         type: String, // credit/debit/lock/order_payment/delivery_earning for order no. OD-240383-1234
-        required: true
-    },
-    referenceId: {
-        type: String,
-        required: true
+        required: true,
     },
 
     referenceModel: {
@@ -65,7 +69,6 @@ const walletTransactionSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 walletTransactionSchema.index({ walletId: 1, createdAt: -1 });
-walletTransactionSchema.index({ transactionId: 1 });
 walletTransactionSchema.index({ referenceId: 1 });
 walletTransactionSchema.pre("save", async function (next) {
     if (!this.transactionId) {

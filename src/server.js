@@ -23,9 +23,23 @@ import otproute from "./routes/otp.route.js";
 import riderkycRoute from "./routes/riderKyc.route.js";
 import sellerkycRoute from "./routes/sellerKyc.route.js";
 import brandRoute from "./routes/brand.route.js";
-import wearRoute from "./routes/wearType.route.js";
+import matrixDashboard from "./routes/matrix.dashboard.js";
+import leadrouter from "./routes/leadControl.route.js";
+import orderQueue from "./queues/orderQueues/order.queue.js";
+// import "./queues/orderQueues/order.worker.js"
+import walletTrancation from "./routes/ReportsRoute/report.route.js";
 dotenv.config();
 connectDB();
+
+// const waitingCount = await orderQueue.getWaitingCount();
+// const waiting = await orderQueue.getWaiting();
+// const counts = await orderQueue.getJobCounts();
+// console.log("Waiting jobs:", waitingCount);
+// console.log("Waiting jobs:", waiting);
+// console.log(counts);
+
+// await orderQueue.drain();
+// console.log(process.listenerCount("exit"));
 
 
 const app = express();
@@ -52,11 +66,19 @@ app.use(
     })
 );
 
+import http from "http";
+import { initSocket } from "./config/socket.js";
+
+const server = http.createServer(app);
+
+initSocket(server);
+
+
 
 // app.use(cors("*"));
 app.use(express.json());
 app.get("/", async (req, res) => {
-    return res.json({ message: "well-come lionis" });
+    return res.json({ message: "well-come Wearaah" });
 });
 app.get("/health/redis", async (req, res) => {
     if (!redis) {
@@ -80,11 +102,12 @@ app.use("/api/otp", otproute);
 // auth routes
 app.use("/api/auth", authRoute);
 //seller routes
+app.use("/api/das", matrixDashboard);
+//seller routes
 app.use("/api/seller", sellerkycRoute);
 //rider routes
 app.use("/api/rider", riderkycRoute);
 //product routes
-app.use("/api/wear/type", wearRoute);
 app.use("/api/brand", brandRoute);
 app.use("/api/product", adminRoutes);
 app.use("/api/category", categoryRoute);
@@ -92,6 +115,7 @@ app.use("/api/subcategory", subcategoryRoute);
 app.use("/api/variant", addvarintRoute);
 // other routes
 app.use("/api/order", orderRoutes);
+app.use("/api/trancation", walletTrancation);
 app.use("/api/contact", contactRoutes);
 app.use("/api/banner", bannerRoutes);
 app.use("/api/faq", faqRoutes);
@@ -100,9 +124,13 @@ app.use("/api/review", reviewRoutes);
 app.use("/api/wishlist", wishlistRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/coupon", couponRoutes);
+// Lead route
+app.use("/api/leads", leadrouter)
 
 
 export default app;
 
 
-app.listen(5000, () => console.log("Server running on port 5000"));
+server.listen(5000, () => {
+    console.log("Server running on port 5000");
+});

@@ -9,6 +9,7 @@ import bcrypt from "bcryptjs/dist/bcrypt.js";
 import sellerModal from "../../models/roleWiseModal/seller.modal.js";
 import riderModal from "../../models/roleWiseModal/rider.modal.js";
 import orderModal from "../../models/order.modal.js";
+import walletSystemModal from "../../models/walletSystem.modal.js";
 /* =========================
    JWT TOKEN GENERATOR
 ========================= */
@@ -49,9 +50,26 @@ export const register = async (req, res) => {
         });
 
         if (existingUser && isexists === "true") {
+            const token = generateToken(existingUser, sessionId);
+            await walletSystemModal.updateOne(
+                { ownerId: existingUser._id, ownerType: existingUser.role },
+                {
+                    $setOnInsert: {
+                        ownerId: existingUser._id,
+                        ownerType: existingUser.role,
+                        availableBalance: 0,
+                        superCoinBalance: 0,
+                        lockedBalance: 0,
+                        currency: "INR",
+                        status: "active"
+                    }
+                },
+                { upsert: true }
+            );
+
             return res.status(200).json({
                 success: true,
-                message: `Welcome Back ${existingUser.name || "user"}, continuing onboarding`,
+                message: `Welcome Back ${existingUser.name || "user"}`,
                 token,
                 user: existingUser
             });
@@ -72,6 +90,22 @@ export const register = async (req, res) => {
             role: "customer"
         });
 
+        await walletSystemModal.updateOne(
+            { ownerId: user._id, ownerType: user.role },
+            {
+                $setOnInsert: {
+                    ownerId: user._id,
+                    ownerType: user.role,
+                    availableBalance: 0,
+                    superCoinBalance: 0,
+                    lockedBalance: 0,
+                    currency: "INR",
+                    status: "active"
+                }
+            },
+            { upsert: true }
+        );
+
         const token = generateToken(user, sessionId);
 
         // if (redis) {
@@ -85,6 +119,98 @@ export const register = async (req, res) => {
         return res.status(201).json({
             success: true,
             message: "Registration success",
+            token,
+            user
+        });
+
+    } catch (err) {
+        res.status(500).json({
+            success: false,
+            message: err.message
+        });
+    }
+};
+
+
+export const registerViaOtp = async (req, res) => {
+    try {
+        const { mobile, otp } = req.body;
+
+        if (!mobile || !otp) {
+            return res.status(400).json({
+                success: false,
+                message: "Mobile and OTP required"
+            });
+        }
+
+        const otpRecord = await otpModal.findOne({ mobile, otp });
+
+        if (!otpRecord || otpRecord.expiresAt < Date.now()) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid or expired OTP"
+            });
+        }
+
+        // ✅ OTP valid → delete it
+        await otpModal.deleteMany({ mobile });
+
+        let user = await userModal.findOne({ mobile });
+
+        // 🔥 NEW USER → AUTO REGISTER
+        if (!user) {
+            user = await userModal.create({
+                mobile,
+                role: "customer"
+            });
+
+            // ✅ wallet create
+            await walletSystemModal.updateOne(
+                { ownerId: user._id, ownerType: user.role },
+                {
+                    $setOnInsert: {
+                        ownerId: user._id,
+                        ownerType: user.role,
+                        availableBalance: 0,
+                        superCoinBalance: 0,
+                        lockedBalance: 0,
+                        currency: "INR",
+                        status: "active"
+                    }
+                },
+                { upsert: true }
+            );
+        } else {
+            // ✅ existing user → wallet ensure
+            await walletSystemModal.updateOne(
+                { ownerId: user._id, ownerType: user.role },
+                {
+                    $setOnInsert: {
+                        ownerId: user._id,
+                        ownerType: user.role,
+                        availableBalance: 0,
+                        superCoinBalance: 0,
+                        lockedBalance: 0,
+                        currency: "INR",
+                        status: "active"
+                    }
+                },
+                { upsert: true }
+            );
+        }
+
+        const sessionId = crypto.randomUUID();
+        const token = generateToken(user, sessionId);
+        // if (redis) {
+        //     await redis.setex(
+        //         `USER_AUTH_SESSION:${user._id}`,
+        //         60 * 60 * 24 * 7,
+        //         sessionId
+        //     );
+        // }
+        return res.status(200).json({
+            success: true,
+            message: "Login successful",
             token,
             user
         });
@@ -217,7 +343,7 @@ export const login = async (req, res) => {
             if (!user.password) {
                 return res.status(400).json({
                     success: false,
-                    message: "Password login not available for this account"
+                    message: "Password login not available for this account, use OTP"
                 });
             }
 

@@ -12,13 +12,37 @@ export const subcreateCategory = async (req, res) => {
             name,
             categoryId,
             sizeType = "alpha",
-            variantAttributes
+            variantAttributes,
+            displayOrder
         } = req.body;
+        let disNumber = Number(displayOrder)
+        const showOnHome = req.body.showOnHome === "true" || req.body.showOnHome === true;
 
         if (!name || !categoryId) {
             return res.status(400).json({
                 success: false,
                 message: "name and categoryId are required"
+            });
+        }
+
+        const exists = await SubCategory.findOne({
+            $or: [
+                { name: name },
+                { displayOrder: disNumber }
+            ]
+        }).select("name displayOrder").lean();
+
+        if (exists?.name === name) {
+            return res.status(409).json({
+                success: false,
+                message: "Category already exists"
+            });
+        }
+
+        if (exists?.displayOrder === disNumber) {
+            return res.status(409).json({
+                success: false,
+                message: "This displayOrder is already used by another category"
             });
         }
 
@@ -42,20 +66,6 @@ export const subcreateCategory = async (req, res) => {
 
         // 🔹 SLUG
         const slug = slugify(name, { lower: true, strict: true });
-
-        // 🔹 DUPLICATE CHECK
-        const exists = await SubCategory.findOne({
-            categoryId,
-            slug
-        });
-
-        if (exists) {
-            return res.status(409).json({
-                success: false,
-                message: "Subcategory already exists in this category"
-            });
-        }
-
         // 🔹 IMAGES
         const bannerimage = req.files?.bannerimage?.[0]
             ? `/uploads/${req.files.bannerimage[0].filename}`
@@ -69,6 +79,7 @@ export const subcreateCategory = async (req, res) => {
             name,
             slug,
             categoryId,
+            showOnHome: showOnHome,
             sizeType,
             attributes,
             variantAttributes: parsedVariantAttributes,
@@ -96,25 +107,98 @@ export const subcreateCategory = async (req, res) => {
 ========================= */
 export const subgetCategories = async (req, res) => {
     try {
-        const categories = await SubCategory.find({ isActive: true }).sort({
-            createdAt: -1
-        }).populate({
+
+        const {
+            pareId,
+            search,
+            isActive,
+            dateFrom,
+            dateTo,
+            page = 1,
+            limit = 10,
+            sort = "createdAt"
+        } = req.query;
+
+        const filter = {};
+
+
+        if (isActive !== undefined) {
+            filter.isActive = isActive === "true";
+        }
+        if (pareId) {
+            filter.categoryId = pareId
+        }
+
+        // search
+        if (search) {
+            filter.$or = [
+                { name: { $regex: search, $options: "i" } },
+                { description: { $regex: search, $options: "i" } }
+            ];
+        }
+
+        // date filter
+        if (dateFrom || dateTo) {
+            filter.createdAt = {};
+
+            if (dateFrom) filter.createdAt.$gte = new Date(dateFrom);
+            if (dateTo) filter.createdAt.$lte = new Date(dateTo);
+        }
+
+        const skip = (Number(page) - 1) * Number(limit);
+
+        const categories = await SubCategory.find(filter).populate({
             path: "categoryId",
             select: "name"
         })
+            .sort({ [sort]: -1 })
+            .skip(skip)
+            .limit(Number(limit))
+            .lean();
 
+        const total = await SubCategory.countDocuments(filter);
+
+        return res.status(200).json({
+            success: true,
+            total,
+            page: Number(page),
+            limit: Number(limit),
+            categories
+        });
+
+    } catch (error) {
+
+        console.error("GET CATEGORY ERROR:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Failed to fetch categories"
+        });
+
+    }
+};
+
+export const getsubCategoriesOnlyIdName = async (req, res) => {
+    try {
+        const categories = await SubCategory.find()
+            .sort()
+            .select("name")
+            .lean();
         return res.status(200).json({
             success: true,
             categories
         });
+
     } catch (error) {
-        console.log(error)
+        console.error("GET CATEGORY ERROR:", error);
         return res.status(500).json({
             success: false,
             message: "Failed to fetch categories"
         });
     }
-};
+
+}
+
 
 
 export const getSubCategoriesByCategory = async (req, res) => {
@@ -192,6 +276,9 @@ export const subupdateCategory = async (req, res) => {
                 strict: true
             });
         }
+        if (req.body.displayOrder) updates.displayOrder = Number(req.body.displayOrder);
+        if (req.body.showOnHome !== undefined) updates.showOnHome = req.body.showOnHome;
+
 
         // 🔹 ATTRIBUTES PARSE
         if (updates.attributes) {
@@ -246,7 +333,7 @@ export const subupdateCategory = async (req, res) => {
 ========================= */
 export const subdeleteCategory = async (req, res) => {
     try {
-        const category = await SubCategory.findByIdAndUpdate(
+        const category = await SubCategory.findByIdAndDelete(
             req.params.id,
             { new: true }
         );

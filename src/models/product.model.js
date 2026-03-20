@@ -1,13 +1,10 @@
 import mongoose from "mongoose";
-import slugify from "slugify";
 
 const productSchema = new mongoose.Schema({
   sellerId: { type: mongoose.Schema.Types.ObjectId, ref: "Seller", required: true },
   brandId: { type: mongoose.Schema.Types.ObjectId, ref: "Brand", required: true, },
   categoryId: { type: mongoose.Schema.Types.ObjectId, ref: "Category", required: true, },
   subCategoryId: { type: mongoose.Schema.Types.ObjectId, ref: "SubCategory", required: true, },
-  wearTypeId: { type: mongoose.Schema.Types.ObjectId, ref: "ProductWearType", required: true, },
-
   name: {
     type: String, required: true,
   },
@@ -16,11 +13,27 @@ const productSchema = new mongoose.Schema({
     unique: true,
   },
 
+  hsnCode: { type: String, required: true },
+
   description: {
     type: String,
     required: true,
     minlength: 20,
     maxlength: 2000
+  },
+  gender: {
+    type: String,
+    enum: ["Men", "Women", "Boys", "Girls", "Kids", "Unisex"],
+    required: true,
+    index: true
+  },
+  defaultVariantId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "ProductVariant"
+  },
+  countryOfOrigin: {
+    type: String,
+    default: "india"
   },
   productImage: [String],
 
@@ -28,10 +41,14 @@ const productSchema = new mongoose.Schema({
     type: String,
     enum: ["alpha", "numeric", "free"]
   },
+  manufacturerDetails: {
+    name: String,
+    address: String
+  },
 
   status: {
     type: String,
-    enum: ["draft", "published", "archived", "rejected", "out-of-stock", "discontinued", "coming-soon", "active", "inactive", "pending", "approved", "flash-sale", "holiday-special", "buy-one-get-one", "limited-time-offer", "anniversary-sale", "price-drop", "special-discount", "coupon-deal", "end-of-season-sale"],
+    enum: ["draft", "pending", "approved", "rejected"],
     default: "pending"
   },
 
@@ -39,6 +56,12 @@ const productSchema = new mongoose.Schema({
     type: Map,
     of: String
   },
+
+  isdeliveryFree: {
+    type: String,
+    default: true
+  },
+
   returnPolicyDays: {
     type: Number,
     default: 7

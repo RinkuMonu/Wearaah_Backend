@@ -16,6 +16,10 @@ sellerkycRoute.post("/submitSellerKyc/request", protect, upload.fields([
     { name: "cancelledCheque", maxCount: 1 }
 ]), submitSellerKyc);
 
+
+// order accept
+
+
 sellerkycRoute.post("/kycSellerAction/:sellerId", protect, isSuperAdmin, sellerKycAction);
 
 export default sellerkycRoute;

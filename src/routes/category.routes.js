@@ -4,7 +4,8 @@ import {
     getCategories,
     getCategoryById,
     updateCategory,
-    deleteCategory
+    deleteCategory,
+    getCategoriesOnlyIdName
 } from "../controllers/category.controller.js";
 
 import { protect } from "../middlewares/auth.middleware.js";
@@ -26,6 +27,8 @@ categoryRoute.post(
 );
 /* PUBLIC */
 categoryRoute.get("/", getCategories);
+categoryRoute.get("/nameonly", getCategoriesOnlyIdName);
+
 categoryRoute.get("/:id", getCategoryById);
 
 

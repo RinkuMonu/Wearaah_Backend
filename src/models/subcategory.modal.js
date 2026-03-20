@@ -22,6 +22,16 @@ const subcategorySchema = new mongoose.Schema({
         default: "alpha"
     },
 
+    showOnHome: {
+        type: Boolean,
+        default: false
+    },
+    
+    displayOrder: {
+        type: Number,
+        default: 0
+    },
+
     attributes: {
         type: Map,
         of: new mongoose.Schema({
@@ -30,7 +40,10 @@ const subcategorySchema = new mongoose.Schema({
             filterable: Boolean
         })
     },
-
+    taxPercent: {
+        type: Number,
+        // required: true
+    },
     variantAttributes: [String],
 
     isActive: { type: Boolean, default: true }

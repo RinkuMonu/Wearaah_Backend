@@ -35,8 +35,8 @@ const sellerSchema = new mongoose.Schema(
         GSTIN: {
             type: String,
             trim: true,
-            match: /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/,
-            message: "Invalid GSTIN format",
+            match: [/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/, "Invalid GSTIN format"],
+            // message: "Invalid GSTIN format",
             required: function () {
                 return this.businessType !== "individual";
             }
@@ -45,7 +45,7 @@ const sellerSchema = new mongoose.Schema(
         PAN: {
             type: String,
             trim: true,
-            toUpperCase: true,
+            uppercase: true,
             match: /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/,
             message: "Invalid PAN format"
         },
@@ -79,10 +79,14 @@ const sellerSchema = new mongoose.Schema(
             default: "open"
         },
 
-        workingHours: {
-            open: String,
-            close: String,
-        },
+        workingHours: [
+            {
+                day: String,
+                open: String,
+                close: String,
+                isClosed: Boolean
+            }
+        ],
 
         isTrustedSeller: {
             type: Boolean,
@@ -166,8 +170,10 @@ const sellerSchema = new mongoose.Schema(
             type: String,
             default: ""
         },
-
-
+        invoicePrefix: {
+            type: String,
+            uppercase: true
+        },
         isApproved: {
             type: Boolean,
             default: false

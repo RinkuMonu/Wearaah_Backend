@@ -4,6 +4,7 @@ import Category from "../models/category.model.js";
 import SubCategory from "../models/subcategory.modal.js";
 import brandModal from "../models/brand.modal.js";
 import slugify from "slugify";
+import mongoose from "mongoose";
 
 
 
@@ -37,10 +38,11 @@ export const createProduct = async (req, res) => {
   try {
     const {
       brandId,
-      categoryId,
       subCategoryId,
       wearTypeId,
       name,
+      hsnCode,
+      gender,
       status,
       description,
       specifications = {}
@@ -50,11 +52,11 @@ export const createProduct = async (req, res) => {
     /* =====================
        BASIC VALIDATION
     ====================== */
-    if (!brandId || !categoryId || !subCategoryId || !name || !description) {
+    if (!brandId || !subCategoryId || !name || !description || !hsnCode || !gender) {
       return res.status(400).json({
         success: false,
         message:
-          "brandId, categoryId, subCategoryId, name, description are required"
+          "brandId, subCategoryId, name, hsnCode, gender description are required"
       });
     }
     const validStatus = status || "pending";
@@ -76,25 +78,18 @@ export const createProduct = async (req, res) => {
     /* =====================
      CATEGORY VALIDATION
   ====================== */
-    const [categoryDoc, subCategoryDoc, brandExist] = await Promise.all([
-      Category.findById(categoryId),
-      SubCategory.findOne({ _id: subCategoryId, categoryId }),
+    const [subCategoryDoc, brandExist] = await Promise.all([
+      SubCategory.findOne({ _id: subCategoryId }),
       brandModal.findOne({ _id: brandId, isActive: true })
     ]);
 
-    if (!categoryDoc || !categoryDoc.isActive) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid or inactive category"
-      });
-    }
     if (!subCategoryDoc) {
       return res.status(400).json({
         success: false,
         message: "Invalid sub category for selected category"
       });
     }
-    console.log(brandExist)
+    console.log(subCategoryDoc)
     if (!brandExist) {
       return res.status(400).json({
         success: false,
@@ -169,10 +164,12 @@ export const createProduct = async (req, res) => {
       sellerId: req.user.id,
       wearTypeId,
       brandId,
-      categoryId,
+      categoryId: subCategoryDoc.categoryId,
       subCategoryId,
       name: name.trim(),
+      hsnCode,
       slug,
+      gender,
       description,
       status: validStatus,
       specifications: parsedSpecifications,
@@ -199,6 +196,7 @@ export const createProduct = async (req, res) => {
 export const getProducts = async (req, res) => {
   try {
     const {
+      search,
       category,
       subCategory,
       brand,
@@ -214,9 +212,10 @@ export const getProducts = async (req, res) => {
       isTopRated
     } = req.query;
 
-    const isPrivileged =
-      req.user?.role === "superAdmin" ||
-      req.user?.role === "seller";
+    // const isPrivileged =
+    //   req.user?.role === "superAdmin" ||
+    //   req.user?.role === "seller";
+    const isPrivileged = false
 
     const pageNumber = Number(page);
     const pageSize = Number(limit);
@@ -226,6 +225,9 @@ export const getProducts = async (req, res) => {
 
     const productMatch = { isActive: true };
 
+    if (search) {
+      productMatch.name = { $regex: search, $options: "i" };
+    }
     if (category)
       productMatch.categoryId = new mongoose.Types.ObjectId(category);
 
@@ -247,8 +249,11 @@ export const getProducts = async (req, res) => {
     if (!isPrivileged) {
       variantMatch.isActive = true;
       variantMatch.stock = { $gt: 0 };
+      variantMatch.status = "approved"
     }
-
+    if (req.user?.role === "seller") {
+      variantMatch.sellerId = new mongoose.Types.ObjectId(req.user.id);
+    }
     if (color)
       variantMatch["attributes.color"] = color.toLowerCase();
 
@@ -285,7 +290,8 @@ export const getProducts = async (req, res) => {
             {
               $project: {
                 sellingPrice: "$pricing.sellingPrice",
-                color: "$attributes.color"
+                color: "$attributes.color",
+                mrp: "$pricing.mrp",
               }
             }
           ],
@@ -353,6 +359,7 @@ export const getProducts = async (req, res) => {
       {
         $addFields: {
           startingPrice: { $min: "$variants.sellingPrice" },
+          mrp: { $max: "$variants.mrp" },
           colors: { $setUnion: [[], "$variants.color"] },
           totalVariants: { $size: "$variants" },
           hasVariants: { $gt: [{ $size: "$variants" }, 0] }
@@ -365,17 +372,22 @@ export const getProducts = async (req, res) => {
         $project: {
           name: 1,
           productImage: 1,
+          subCategoryId: 1,
+          description: 1,
 
+          gender: 1,
           category: "$category.name",
+          taxPercent: "$category.taxPercent",
           brand: "$brand.name",
           sizeType: "$subCategory.sizeType",
-
+          specifications: 1,
           rating: 1,
           isNewArrival: 1,
           isTrending: 1,
           isBestSelling: 1,
           isTopRated: 1,
 
+          mrp: 1,
           startingPrice: 1,
           colors: 1,
           totalVariants: 1,
@@ -474,96 +486,53 @@ export const getProductById = async (req, res) => {
 
 /* =========================
    UPDATE PRODUCT
-   PUT /api/admin/products/:id
+   PUT /api/admin/products/:id 
 ========================= */
 export const updateProduct = async (req, res) => {
   try {
-    const productId = req.params.id;
-    let status = req.body.status || "pending";
-    const updates = {};
-    if (req.user.role === "seller") {
 
-      if (status === "draft") {
-        status = "draft";
-      } else if (status === "submit") {
-        status = "pending";
-      } else if (status === "active") {
-        status = "active"
-      } else if (status === "inactive") {
-        status = "inactive"
-      }
-
-      else {
-        return res.status(403).json({
-          success: false,
-          message: `You cannot set ${status} status`
-        });
-      }
-    }
-    if (req.user.role === "superadmin") {
-
-      const allowedStatuses = [
-        "draft",
-        "pending",
-        "approved",
-        "rejected",
-        "active",
-        "inactive"
-      ];
-
-      if (!allowedStatuses.includes(status)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid status"
-        });
-      }
-
-    }
-    const product = await Product.findById(productId);
+    const product = await Product.findById(req.params.id);
 
     if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Product not found"
-      });
+      return res.status(404).json({ success: false, message: "Product not found" });
     }
 
-
-    /* ---------------- SELLER OWNERSHIP ---------------- */
-
-    if (
-      req.user.role === "seller" &&
-      product.sellerId.toString() !== req.user.id.toString()
-    ) {
-      return res.status(403).json({
-        success: false,
-        message: "You are not allowed to update this product"
-      });
+    if (product.sellerId.toString() !== req.user.id.toString()) {
+      return res.status(403).json({ success: false, message: "Not allowed" });
     }
 
-    /* ---------------- ALLOWED FIELDS ---------------- */
+    const updates = {};
 
-    const allowedUpdates = [
+    const editableFields = [
       "name",
-      "status",
       "description",
-      "isNewArrival",
-      "isTrending",
-      "isBestSelling",
-      "isTopRated",
+      "specifications",
       "returnPolicyDays"
     ];
 
-    allowedUpdates.forEach(field => {
+    editableFields.forEach(field => {
       if (req.body[field] !== undefined) {
         updates[field] = req.body[field];
       }
     });
 
-    /* ---------------- SPECIFICATIONS ---------------- */
+    /* ------------ IMAGE ------------ */
 
-    if (req.body.specifications) {
+    if (req.files?.length) {
+      updates.productImage = req.files.map(
+        file => `/uploads/${file.filename}`
+      );
+    }
+
+    /* ------------ SLUG ------------ */
+
+    if (updates.name && updates.name !== product.name) {
+      updates.slug = await generateProductSlug(updates.name, product._id);
+    }
+
+    if (req.body.specifications !== undefined) {
       let specs = req.body.specifications;
+      // console.log(typeof specs)
 
       if (typeof specs === "string") {
         try {
@@ -576,63 +545,35 @@ export const updateProduct = async (req, res) => {
         }
       }
 
-      if (typeof specs !== "object" || Array.isArray(specs)) {
-        return res.status(400).json({
-          success: false,
-          message: "Specifications must be an object"
-        });
-      }
-
       updates.specifications = specs;
     }
 
-    /* ---------------- IMAGE UPDATE ---------------- */
-    if (req.files?.length > 0) {
-      const newImages = req.files.map(
-        file => `/uploads/${file.filename}`
-      );
+    /* ------------ STATUS LOGIC ------------ */
 
-      updates.productImage = newImages;
-    }
-
-    /* ---------------- QC FLOW ---------------- */
-
-    if (req.user.role === "seller") {
+    if (req.body.status === "draft") {
+      updates.status = "draft";
+    } else {
       updates.status = "pending";
     }
 
-    if (updates.name && updates.name !== product.name) {
-      updates.slug = await generateProductSlug(
-        updates.name,
-        product._id
-      );
-    }
-    /* ---------------- UPDATE ---------------- */
-
     const updatedProduct = await Product.findByIdAndUpdate(
-      productId,
+      product._id,
       updates,
-      {
-        new: true,
-        runValidators: true
-      }
+      { new: true, runValidators: true }
     );
 
-    return res.status(200).json({
+    return res.json({
       success: true,
       message:
-        req.user.role === "seller"
-          ? "Product updated & sent for QC"
-          : "Product updated successfully",
+        updates.status === "draft"
+          ? "Saved as draft"
+          : "Product sent for QC",
       product: updatedProduct
     });
 
-  } catch (error) {
-    console.error("update product error", error);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to update product"
-    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: err.message || "Update failed" });
   }
 };
 
@@ -663,18 +604,7 @@ export const deleteProduct = async (req, res) => {
   }
 };
 
-export const addVariant = async (req, res) => {
 
-  if (!req.body.color || !req.body.size || !req.body.price || !req.params.productId) {
-    return res.status(400).json({ message: "Missing variant fields" });
-  }
-
-  const variant = await ProductVariant.create({
-    productId: req.params.productId,
-    ...req.body
-  });
-  res.json(variant);
-};
 
 export const getFilters = async (req, res) => {
   try {
@@ -724,5 +654,50 @@ export const getFilters = async (req, res) => {
       success: false,
       message: "Failed to fetch filters"
     });
+  }
+};
+
+
+export const adminUpdateProduct = async (req, res) => {
+  try {
+
+    const product = await Product.findById(req.params.id);
+
+    if (!product) {
+      return res.status(404).json({ success: false, message: "Product not found" });
+    }
+
+    const allowedFields = [
+      "status",
+      "isActive",
+      "isTrending",
+      "isBestSelling",
+      "isTopRated",
+      "returnPolicyDays"
+    ];
+
+    const updates = {};
+
+    allowedFields.forEach(field => {
+      if (req.body[field] !== undefined) {
+        updates[field] = req.body[field];
+      }
+    });
+
+    const updatedProduct = await Product.findByIdAndUpdate(
+      product._id,
+      updates,
+      { new: true }
+    );
+
+    return res.json({
+      success: true,
+      message: "Product updated by admin",
+      product: updatedProduct
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Admin update failed" });
   }
 };

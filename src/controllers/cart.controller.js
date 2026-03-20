@@ -1,178 +1,223 @@
-import Cart from "../models/cart.model.js";
 import ProductVariant from "../models/productVariant.model.js";
+import CartModal from "../models/cart.model.js"
+import productVariantModel from "../models/productVariant.model.js";
 
-/* =========================
-   ADD ITEM TO CART
-========================= */
-export const addItemToCart = async (req, res) => {
+
+export const addToCart = async (req, res) => {
   try {
-    const { variantId, quantity } = req.body;
     const userId = req.user.id;
+    const { variantId, quantity = 1 } = req.body;
 
-    // if (!variantId || !quantity) {
-    //   return res.status(400).json({ message: "Variant ID and quantity required" });
-    // }
+    // 🔹 Variant check
+    const variant = await productVariantModel.findById(variantId).populate({
+      path: "productId",
+      select: "_id"
+    }).select("productId sellerId stock status pricing")
 
-    if (!variantId || !quantity) {
-      return res.status(400).json({ message: "Variant ID and quantity required" });
+    if (!variant) {
+      return res.status(404).json({ success: false, message: "Variant not found" });
     }
 
-    if (quantity < 1 || quantity > 10) {
+    const product = variant.productId;
+    // 🔹 Stock check
+    if (variant.stock < quantity) {
       return res.status(400).json({
-        message: "You can add minimum 1 and maximum 10 quantity per item"
+        success: false,
+        message: `only ${variant.stock} items available in stock`
       });
     }
 
-
-    const variant = await ProductVariant.findById(variantId);
-    if (!variant) {
-      return res.status(404).json({ message: "Variant not found" });
-    }
-
-    const price = variant.price;
-
-    let cart = await Cart.findOne({ user: userId });
+    // 🔹 Get or create cart
+    let cart = await CartModal.findOne({ user: userId });
 
     if (!cart) {
-      cart = await Cart.create({
-        user: userId,
-        items: [{
-          variant: variantId,
-          quantity,
-          price,
-          total: price * quantity
-        }]
-      });
+      cart = new CartModal({ user: userId, items: [] });
+    }
+
+    // 🔹 Check existing item
+    const existingItem = cart.items.find(
+      (item) => item.variantId.toString() === variantId
+    );
+
+    if (existingItem) {
+      existingItem.quantity += quantity;
+      existingItem.finalPrice = existingItem.quantity * existingItem.sellingPrice;
     } else {
-      const item = cart.items.find(
-        (i) => i.variant.toString() === variantId
-      );
-
-      if (item) {
-        const newQuantity = item.quantity + quantity;
-
-        if (newQuantity > 10) {
-          return res.status(400).json({
-            message: "Maximum 10 quantity allowed per item"
-          });
-        }
-
-        item.quantity = newQuantity;
-        item.total = item.quantity * item.price;
-      }
-
-
-      else {
-        cart.items.push({
-          variant: variantId,
-          quantity,
-          price,
-          total: price * quantity
-        });
-      }
-      await cart.save();
-    }
-
-    res.status(200).json({ message: "Item added to cart", cart });
-  } catch (error) {
-    res.status(500).json({ message: "Failed to add item", error: error.message });
-  }
-};
-
-
-/* =========================
-   UPDATE CART ITEM
-========================= */
-export const updateCartItemQuantity = async (req, res) => {
-  try {
-    const { variantId, quantity } = req.body;
-    const cart = await Cart.findOne({ user: req.user.id });
-
-    if (!cart) return res.status(404).json({ message: "Cart not found" });
-
-    const item = cart.items.find(
-      (i) => i.variant.toString() === variantId
-    );
-
-    if (!item) return res.status(404).json({ message: "Variant not in cart" });
-
-    // item.quantity = quantity;
-    // item.total = item.price * quantity;
-
-    if (quantity < 1 || quantity > 10) {
-      return res.status(400).json({
-        message: "Quantity must be between 1 and 10"
+      cart.items.push({
+        productId: product._id,
+        variantId: variant._id,
+        sellerId: variant.sellerId,
+        mrp: variant.pricing?.mrp,
+        sellingPrice: variant.pricing?.sellingPrice,
+        quantity,
+        finalPrice: variant.pricing?.sellingPrice * quantity
       });
     }
 
-    item.quantity = quantity;
-    item.total = item.price * quantity;
-
-
-    await cart.save();
-
-    res.json({ message: "Cart updated", cart });
-  } catch (error) {
-    res.status(500).json({ message: "Update failed", error: error.message });
-  }
-};
-
-
-/* =========================
-   REMOVE ITEM
-========================= */
-export const removeItemFromCart = async (req, res) => {
-  try {
-    const cart = await Cart.findOne({ user: req.user.id });
-    if (!cart) return res.status(404).json({ message: "Cart not found" });
-
-    cart.items = cart.items.filter(
-      (i) => i.variant.toString() !== req.body.variantId
+    // 🔹 Grand total
+    cart.grandTotal = cart.items.reduce(
+      (sum, item) => sum + item.finalPrice,
+      0
     );
 
-    if (cart.items.length === 0) {
-      await Cart.deleteOne({ user: req.user.id });
-      return res.json({ message: "Cart cleared" });
-    }
-
     await cart.save();
-    res.json({ message: "Item removed", cart });
-  } catch (error) {
-    res.status(500).json({ message: "Remove failed", error: error.message });
-  }
-};
 
-
-/* =========================
-   GET CART
-========================= */
-export const getCart = async (req, res) => {
-  const cart = await Cart.findOne({ user: req.user.id })
-    .populate({
-      path: "items.variant",
-      populate: {
-        path: "productId",
-        select: "name productImage"
-      }
+    return res.json({
+      success: true,
+      message: "Item added to cart",
+      cart
     });
 
-  if (!cart) {
-    return res.json({ items: [], totalAmount: 0 });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
-
-  res.json(cart);
 };
 
 
-/* =========================
-   CHECKOUT CART
-========================= */
-export const checkoutCart = async (req, res) => {
-  const cart = await Cart.findOne({ user: req.user.id });
-  if (!cart) return res.status(404).json({ message: "Cart not found" });
 
-  cart.isCheckedOut = true;
-  await cart.save();
 
-  res.json({ message: "Cart checked out", cart });
+
+
+export const updateCartItem = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    let { variantId, quantity } = req.body;
+
+    // 🔥 FIX 1: force number
+    quantity = Number(quantity);
+
+    if (!variantId || isNaN(quantity)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid data"
+      });
+    }
+
+    const cart = await CartModal.findOne({ user: userId });
+
+    if (!cart) {
+      return res.status(404).json({ success: false, message: "Cart not found" });
+    }
+
+    // 🔥 FIX 2: safe comparison
+    const item = cart.items.find(
+      (i) => i.variantId.toString() === variantId.toString()
+    );
+
+    if (!item) {
+      return res.status(404).json({ success: false, message: "Item not found" });
+    }
+
+    // 🔥 STOCK CHECK
+    const variant = await ProductVariant.findById(variantId).select("stock").lean()
+
+    if (!variant) {
+      return res.status(404).json({
+        success: false,
+        message: "Variant not found"
+      });
+    }
+
+    if (quantity > variant.stock) {
+      return res.status(400).json({
+        success: false,
+        message: `Only ${variant.stock} items available`
+      });
+    }
+
+    // 🔥 REMOVE IF ZERO
+    if (quantity <= 0) {
+      cart.items = cart.items.filter(
+        (i) => i.variantId.toString() !== variantId.toString()
+      );
+    } else {
+      item.quantity = quantity; // 🔥 actual update
+      item.finalPrice = item.sellingPrice * quantity;
+    }
+
+    // 🔥 TOTAL RECALC
+    cart.grandTotal = cart.items.reduce(
+      (sum, item) => sum + item.finalPrice,
+      0
+    );
+
+    await cart.save();
+
+    return res.json({
+      success: true,
+      message: "Cart updated",
+      cart
+    });
+
+  } catch (err) {
+    console.error("UPDATE CART ERROR:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+
+
+
+
+
+
+
+
+
+
+
+export const removeCartItem = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+    if (!id) {
+      return res.status(404).json({ success: false, message: "variantId missing" });
+
+    }
+
+    const cart = await CartModal.findOne({ user: userId });
+
+    if (!cart) {
+      return res.status(404).json({ success: false, message: "Cart not found" });
+    }
+
+    cart.items = cart.items.filter(
+      (item) => item.variantId.toString() !== id
+    );
+
+    cart.grandTotal = cart.items.reduce(
+      (sum, item) => sum + item.finalPrice,
+      0
+    );
+
+    await cart.save();
+
+    return res.json({
+      success: true,
+      message: "Item removed",
+      cart
+    });
+
+  } catch (err) {
+    console.log(err)
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+
+
+export const getCart = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const cart = await CartModal.findOne({ user: userId });
+
+    return res.json({
+      success: true,
+      cart: cart || { items: [], grandTotal: 0 }
+    });
+
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
 };

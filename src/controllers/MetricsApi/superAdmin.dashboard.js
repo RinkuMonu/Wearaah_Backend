@@ -1,45 +1,62 @@
-import orderModal from "../../models/order.modal";
-import productModel from "../../models/product.model";
-import riderModal from "../../models/roleWiseModal/rider.modal";
-import sellerModal from "../../models/roleWiseModal/seller.modal";
-import userModal from "../../models/roleWiseModal/user.modal";
-
 export const getSuperAdminDashboard = async (req, res) => {
     try {
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
 
         const [
             totalUsers,
             totalCustomers,
             totalSellers,
             totalRiders,
-            totalOrders,
+            totalProducts,
             pendingSellerKyc,
             pendingRiderKyc,
-            totalProducts,
-            todayOrders,
-            deliveredOrders,
-            canceledOrders,
-            shippedOrders,
-            returnedOrders,
-            pendingOrders,
-            totalRevenue,
+            totalOrders,
+            orderStats
         ] = await Promise.all([
-            userModal.countDocuments(),
+            userModal.estimatedDocumentCount(),
             userModal.countDocuments({ role: "customer" }),
-            sellerModal.countDocuments(),
-            riderModal.countDocuments(),
-            orderModal.countDocuments(),
+            sellerModal.estimatedDocumentCount(),
+            riderModal.estimatedDocumentCount(),
+            productModel.estimatedDocumentCount(),
             sellerModal.countDocuments({ kycStatus: "pending" }),
             riderModal.countDocuments({ kycStatus: "pending" }),
-            productModel.countDocuments(),
-            orderModal.countDocuments({ createdAt: { $gte: new Date().setHours(0, 0, 0, 0) } }),
-            orderModal.countDocuments({ orderStatus: "delivered" }),
-            orderModal.countDocuments({ orderStatus: "cancelled" }),
-            orderModal.countDocuments({ orderStatus: "shipped" }),
-            orderModal.countDocuments({ orderStatus: "returned" }),
-            orderModal.countDocuments({ sellerId, orderStatus: { $in: ["placed", "confirmed", "packed"] } }),
-            orderModal.aggregate([{ $match: { paymentStatus: "paid" } }, { $group: { _id: null, total: { $sum: "$totalAmount" } } }]),
+            orderModal.estimatedDocumentCount(),
+            orderModal.aggregate([
+                {
+                    $facet: {
+                        statusCounts: [
+                            {
+                                $group: {
+                                    _id: "$orderStatus",
+                                    count: { $sum: 1 }
+                                }
+                            }
+                        ],
+                        todayOrders: [
+                            { $match: { createdAt: { $gte: todayStart } } },
+                            { $count: "count" }
+                        ],
+                        revenue: [
+                            { $match: { paymentStatus: "paid" } },
+                            {
+                                $group: {
+                                    _id: null,
+                                    total: { $sum: "$totalAmount" }
+                                }
+                            }
+                        ]
+                    }
+                }
+            ])
         ]);
+
+        const stats = orderStats[0];
+
+        const statusMap = {};
+        stats.statusCounts.forEach(s => {
+            statusMap[s._id] = s.count;
+        });
 
         res.json({
             success: true,
@@ -48,23 +65,25 @@ export const getSuperAdminDashboard = async (req, res) => {
                 totalCustomers,
                 totalSellers,
                 totalRiders,
+                totalProducts,
                 totalOrders,
                 pendingSellerKyc,
                 pendingRiderKyc,
-                totalProducts,
-                todayOrders,
-                deliveredOrders,
-                canceledOrders,
-                shippedOrders,
-                returnedOrders,
-                pendingOrders,
-                totalRevenue: totalRevenue[0]?.total || 0,
+                todayOrders: stats.todayOrders[0]?.count || 0,
+                deliveredOrders: statusMap.delivered || 0,
+                canceledOrders: statusMap.cancelled || 0,
+                shippedOrders: statusMap.shipped || 0,
+                returnedOrders: statusMap.returned || 0,
+                pendingOrders:
+                    (statusMap.placed || 0) +
+                    (statusMap.confirmed || 0) +
+                    (statusMap.packed || 0),
+                totalRevenue: stats.revenue[0]?.total || 0
             }
         });
 
     } catch (err) {
         console.error("Error in getSuperAdminDashboard:", err);
         res.status(500).json({ message: err.message });
-
     }
 };

@@ -110,6 +110,25 @@ export const getBrands = async (req, res) => {
         res.status(500).json({ message: err.message });
     }
 };
+export const getBrandsNameID = async (req, res) => {
+    try {
+        let query = {}
+        if (req.user.role === "seller") {
+            query.sellerId = req.user.id;
+        }
+
+        const brands = await Brand.find(query)
+            .sort({ createdAt: -1 })
+
+        return res.json({
+            success: true,
+            data: brands,
+        });
+
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+};
 
 /* =========================
    GET SINGLE BRAND

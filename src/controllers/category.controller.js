@@ -7,13 +7,15 @@ import Category from "../models/category.model.js";
 ========================= */
 export const createCategory = async (req, res) => {
     try {
-        const { name, description } = req.body;
+        const { name, description, displayOrder } = req.body;
         if (!req.files.bannerimage || !req.files.smallimage || !name || !description) {
             return res.status(400).json({
                 success: false,
-                message: "name, description,Banner image and small image are required"
+                message: "name, description, Banner image and small image are required"
             });
         }
+        const showOnHome = req.body.showOnHome === "true" || req.body.showOnHome === true;
+        let disNumber = Number(displayOrder)
 
 
         if (!name) {
@@ -23,14 +25,24 @@ export const createCategory = async (req, res) => {
             });
         }
 
-        const exists = await Category.exists({
-            $or: [{ name }]
-        }).select("_id name").lean();
+        const exists = await Category.findOne({
+            $or: [
+                { name: name },
+                { displayOrder: disNumber }
+            ]
+        }).select("name displayOrder").lean();
 
-        if (exists) {
+        if (exists?.name === name) {
             return res.status(409).json({
                 success: false,
                 message: "Category already exists"
+            });
+        }
+
+        if (exists?.displayOrder === disNumber) {
+            return res.status(409).json({
+                success: false,
+                message: "This displayOrder is already used by another category"
             });
         }
         const bannerimage = req.files?.bannerimage?.[0]
@@ -43,6 +55,8 @@ export const createCategory = async (req, res) => {
         const category = await Category.create({
             createBy: req.user.id,
             name,
+            showOnHome: showOnHome,
+            displayOrder: disNumber,
             description,
             bannerimage,
             smallimage
@@ -68,22 +82,97 @@ export const createCategory = async (req, res) => {
 ========================= */
 export const getCategories = async (req, res) => {
     try {
-        const categories = await Category.find().sort({
-            createdAt: -1
-        });
+
+        const {
+            search,
+            isActive,
+            showOnHome,
+            dateFrom,
+            dateTo,
+            page = 1,
+            limit = 10,
+            sort = "createdAt"
+        } = req.query;
+
+        const filter = {};
+
+
+        if (isActive !== undefined) {
+            filter.isActive = isActive === "true";
+        }
+
+        if (showOnHome !== undefined) {
+            filter.showOnHome = showOnHome === "true";
+        }
+
+
+        // search
+        if (search) {
+            filter.$or = [
+                { name: { $regex: search, $options: "i" } },
+                { description: { $regex: search, $options: "i" } }
+            ];
+        }
+
+        // date filter
+        if (dateFrom || dateTo) {
+            filter.createdAt = {};
+
+            if (dateFrom) filter.createdAt.$gte = new Date(dateFrom);
+            if (dateTo) filter.createdAt.$lte = new Date(dateTo);
+        }
+
+        const skip = (Number(page) - 1) * Number(limit);
+
+        const categories = await Category.find(filter)
+            // .populate("wearTypeId", "name")
+            .sort({ [sort]: -1 })
+            .skip(skip)
+            .limit(Number(limit))
+            .select("name slug description showOnHome isActive displayOrder smallimage bannerimage createdAt")
+            .lean();
+
+        const total = await Category.countDocuments(filter);
 
         return res.status(200).json({
             success: true,
+            total,
+            page: Number(page),
+            limit: Number(limit),
             categories
         });
+
     } catch (error) {
+
+        console.error("GET CATEGORY ERROR:", error);
+
         return res.status(500).json({
             success: false,
             message: "Failed to fetch categories"
         });
+
     }
 };
+export const getCategoriesOnlyIdName = async (req, res) => {
+    try {
+        const categories = await Category.find()
+            .sort()
+            .select("name")
+            .lean();
+        return res.status(200).json({
+            success: true,
+            categories
+        });
 
+    } catch (error) {
+        console.error("GET CATEGORY ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to fetch categories"
+        });
+
+    }
+};
 /* =========================
    GET CATEGORY BY ID
    GET /api/categories/:id
@@ -126,14 +215,11 @@ export const updateCategory = async (req, res) => {
             });
         }
         const updates = {};
-
         if (req.body.name) updates.name = req.body.name;
+        if (req.body.displayOrder) updates.displayOrder = Number(req.body.displayOrder);
         if (req.body.description) updates.description = req.body.description;
-        if (req.body.allowedFilters) updates.allowedFilters = req.body.allowedFilters;
-        if (typeof req.body.attributeFilters === "string") {
-            updates.attributeFilters = JSON.parse(req.body.attributeFilters);
-        }
         if (req.body.isActive !== undefined) updates.isActive = req.body.isActive;
+        if (req.body.showOnHome !== undefined) updates.showOnHome = req.body.showOnHome;
 
         if (req.files?.bannerimage?.[0]) {
             deleteLocalFile(category.bannerimage);
@@ -144,6 +230,29 @@ export const updateCategory = async (req, res) => {
             deleteLocalFile(category.smallimage);
             updates.smallimage = `/uploads/${req.files.smallimage[0].filename}`;
         }
+        const exists = await Category.findOne({
+            _id: { $ne: req.params.id },
+            $or: [
+                { name: updates.name },
+                { displayOrder: updates.displayOrder }
+            ]
+        }).select("name displayOrder").lean();
+
+        if (exists?.name === updates.name) {
+            return res.status(409).json({
+                success: false,
+                message: "Category name already exists"
+            });
+        }
+
+        if (exists?.displayOrder === updates.displayOrder) {
+            return res.status(409).json({
+                success: false,
+                message: "This displayOrder is already used"
+            });
+        }
+
+
         const updatedCategory = await Category.findByIdAndUpdate(
             req.params.id,
             { $set: updates },

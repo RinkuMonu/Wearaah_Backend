@@ -8,18 +8,31 @@ const categorySchema = new mongoose.Schema(
       ref: "User",
       required: true
     },
-    wearTypeId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "WearType",
-      required: true,
-      index: true
-    },
     name: {
       type: String,
       unique: true,
       index: true,
       required: true,
       trim: true,
+      enum: [
+        "Top Wear",
+        "Bottom Wear",
+        "Footwear",
+        "Innerwear",
+        "Winter Wear",
+        "Ethnic Wear",
+        "Activewear",
+        "Sportswear",
+        "Sleepwear",
+        "Swimwear",
+        "Accessories",
+        "Plus Size",
+        "Maternity Wear",
+        "Loungewear",
+        "Formal Wear",
+        "Casual Wear",
+        "Party Wear"
+      ]
     },
     description: {
       type: String,
@@ -44,7 +57,6 @@ const categorySchema = new mongoose.Schema(
       type: String,
       // required: true,
     },
-
     isActive: {
       type: Boolean,
       default: true,

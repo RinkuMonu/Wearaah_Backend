@@ -13,16 +13,14 @@ const userSchema = new mongoose.Schema(
 
         name: {
             type: String,
-            required: true,
+            // required: true,
             trim: true
         },
 
         email: {
             type: String,
-            required: true,
-            unique: true,
             lowercase: true,
-            // match: /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/
+            sparse: true
         },
 
         mobile: {
@@ -34,7 +32,7 @@ const userSchema = new mongoose.Schema(
 
         password: {
             type: String,
-            required: true,
+            // required: true,
             select: false
         },
 
@@ -83,7 +81,7 @@ userSchema.index({ role: 1 });
 userSchema.index({ isActive: 1 });
 userSchema.index({ isBlocked: 1 });
 userSchema.index({ createdAt: -1 });
-userSchema.index({ name: "text", email: "text", mobile: "Number" });
+userSchema.index({ name: "text", email: "text" });
 
 userSchema.pre("save", async function (next) {
     if (!this.isModified("password")) return next();
@@ -113,7 +111,7 @@ userSchema.pre("validate", async function (next) {
 
         const paddedSeq = counter.seq.toString().padStart(6, "0");
 
-        this.platformId = `LNS-${prefix}-${paddedSeq}`;
+        this.platformId = `WR-${prefix}-${paddedSeq}`;
     }
 
     next();

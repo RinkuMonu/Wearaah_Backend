@@ -1,25 +1,32 @@
 import express from "express";
 import {
   createOrder,
-  getMyOrders,
   getOrderById,
-  getAllOrders,
-  updateOrderStatus,
-  deleteOrder
+  deleteOrder,
+  OfflinePurchaseInvoiceGen,
+  getOrders,
+  acceptOrderBySeller,
+  getUnseenOrders,
+  markOrdersSeen
 } from "../controllers/order.controller.js";
 import { protect } from "../middlewares/auth.middleware.js";
-import { isSuperAdmin } from "../middlewares/role.middleware.js";
+import { isSeller, isSuperAdmin } from "../middlewares/role.middleware.js";
 
 const router = express.Router();
 
 // User
 router.post("/", protect, createOrder);
-router.get("/my", protect, getMyOrders);
-router.get("/:id", protect, getOrderById);
+router.get("/my", protect, getOrders);
+// seller get unseen order//
+router.get("/unseen", protect, getUnseenOrders);
+// get order by id?
+// seller route
+router.put("/mark-seen", protect, markOrdersSeen);
+router.put("/offlinePurchase", protect, OfflinePurchaseInvoiceGen);
+router.patch("/seller/accept/:orderId", protect, acceptOrderBySeller)
 
-// Admin
-router.get("/", protect, isSuperAdmin, getAllOrders);
-router.put("/:id/status", protect, isSuperAdmin, updateOrderStatus);
+// admin route
+router.get("/:id", protect, getOrderById);
 router.delete("/:id", protect, isSuperAdmin, deleteOrder);
 
 export default router;
