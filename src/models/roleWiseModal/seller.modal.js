@@ -11,19 +11,16 @@ const sellerSchema = new mongoose.Schema(
 
         shopName: {
             type: String,
-            required: true,
             trim: true
         },
 
         businessType: {
             type: String,
             enum: ["individual", "proprietorship", "partnership", "pvt_ltd"],
-            required: true
         },
         yearOfExperience: {
             type: String,
             enum: ["0-1", "1-3", "3-5", "5+"],
-            required: true
         },
 
         termsAndConditions: {
@@ -37,9 +34,9 @@ const sellerSchema = new mongoose.Schema(
             trim: true,
             match: [/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/, "Invalid GSTIN format"],
             // message: "Invalid GSTIN format",
-            required: function () {
-                return this.businessType !== "individual";
-            }
+            // required: function () {
+            //     return this.businessType !== "individual";
+            // }
         },
 
         PAN: {
@@ -48,6 +45,10 @@ const sellerSchema = new mongoose.Schema(
             uppercase: true,
             match: /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/,
             message: "Invalid PAN format"
+        },
+        aadhaarNumber: {
+            type: String,
+            match: /^[0-9]{12}$/
         },
 
         pickupDelivery: {
@@ -62,7 +63,7 @@ const sellerSchema = new mongoose.Schema(
             type: {
                 type: String,
                 enum: ["Point"],
-                default: "Point"
+                // default: "Point"
             },
             coordinates: {
                 type: [Number],
@@ -87,16 +88,20 @@ const sellerSchema = new mongoose.Schema(
                 isClosed: Boolean
             }
         ],
-
+        kycStep: {
+            type: Number
+        },
         isTrustedSeller: {
             type: Boolean,
             default: false
         },
+
         performance: {
             lateShipmentRate: Number,
             onTimeDeliveryRate: Number,
             customerSatisfaction: Number
         },
+
         returnPolicyDays: {
             type: Number,
             default: 7
@@ -128,6 +133,13 @@ const sellerSchema = new mongoose.Schema(
         },
 
         kycDocuments: {
+            aadhaarFront: {
+                type: String,
+            },
+            aadhaarBack: {
+                type: String,
+            },
+
             gstCertificate: {
                 type: String,
                 required: function () {
@@ -137,17 +149,14 @@ const sellerSchema = new mongoose.Schema(
 
             panCard: {
                 type: String,
-                required: true
             },
 
             shopLicense: {
                 type: String,
-                required: true
             },
 
             cancelledCheque: {
                 type: String,
-                required: true
             }
         },
         socialAccount: {
@@ -162,7 +171,7 @@ const sellerSchema = new mongoose.Schema(
 
         kycStatus: {
             type: String,
-            enum: ["pending", "verified", "rejected"],
+            enum: ["pending", "submitted", "verified", "rejected"],
             default: "pending"
         },
 
@@ -171,7 +180,7 @@ const sellerSchema = new mongoose.Schema(
             default: ""
         },
         invoicePrefix: {
-            type: String,
+            type: String,//shop name code UFG
             uppercase: true
         },
         isApproved: {

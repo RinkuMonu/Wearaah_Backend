@@ -13,7 +13,7 @@ import walletSystemModal from "../../models/walletSystem.modal.js";
 /* =========================
    JWT TOKEN GENERATOR
 ========================= */
-const generateToken = (user, sessionId) => {
+export const generateToken = (user, sessionId) => {
     return jwt.sign(
         {
             id: user._id,
@@ -27,109 +27,6 @@ const generateToken = (user, sessionId) => {
 };
 
 
-export const register = async (req, res) => {
-    try {
-        const {
-            name,
-            email,
-            password,
-            mobile,
-            isexists = false
-        } = req.body;
-        if (!name || !email || !password || !mobile) {
-            return res.status(400).json({
-                success: false,
-                message: "All fields required"
-            });
-        }
-
-        const sessionId = crypto.randomUUID();
-
-        const existingUser = await userModal.findOne({
-            $or: [{ email }, { mobile }]
-        });
-
-        if (existingUser && isexists === "true") {
-            const token = generateToken(existingUser, sessionId);
-            await walletSystemModal.updateOne(
-                { ownerId: existingUser._id, ownerType: existingUser.role },
-                {
-                    $setOnInsert: {
-                        ownerId: existingUser._id,
-                        ownerType: existingUser.role,
-                        availableBalance: 0,
-                        superCoinBalance: 0,
-                        lockedBalance: 0,
-                        currency: "INR",
-                        status: "active"
-                    }
-                },
-                { upsert: true }
-            );
-
-            return res.status(200).json({
-                success: true,
-                message: `Welcome Back ${existingUser.name || "user"}`,
-                token,
-                user: existingUser
-            });
-        }
-
-        if (existingUser) {
-            return res.status(409).json({
-                success: false,
-                message: "User already exists"
-            });
-        }
-
-        const user = await userModal.create({
-            name,
-            email,
-            password,
-            mobile: Number(mobile),
-            role: "customer"
-        });
-
-        await walletSystemModal.updateOne(
-            { ownerId: user._id, ownerType: user.role },
-            {
-                $setOnInsert: {
-                    ownerId: user._id,
-                    ownerType: user.role,
-                    availableBalance: 0,
-                    superCoinBalance: 0,
-                    lockedBalance: 0,
-                    currency: "INR",
-                    status: "active"
-                }
-            },
-            { upsert: true }
-        );
-
-        const token = generateToken(user, sessionId);
-
-        // if (redis) {
-        //     await redis.setex(
-        //         `USER_AUTH_SESSION:${user._id}`,
-        //         60 * 60 * 24 * 7,
-        //         sessionId
-        //     );
-        // }
-
-        return res.status(201).json({
-            success: true,
-            message: "Registration success",
-            token,
-            user
-        });
-
-    } catch (err) {
-        res.status(500).json({
-            success: false,
-            message: err.message
-        });
-    }
-};
 
 
 export const registerViaOtp = async (req, res) => {

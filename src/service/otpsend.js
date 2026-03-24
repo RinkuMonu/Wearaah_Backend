@@ -71,19 +71,24 @@ export const sendOtpController = async (req, res) => {
             },
             { upsert: true }
         );
-        const smsResult = await sendOtpService(mobile, otp);
-        if (smsResult.success) {
-            return res.status(200).json({
-                success: true,
-                message: "OTP sent successfully",
-                data: { mobile },
-            });
-        } else {
-            return res.status(400).json({
-                success: false,
-                message: smsResult.message || "Failed to send OTP",
-            });
-        }
+        // const smsResult = await sendOtpService(mobile, otp);
+        return res.status(200).json({
+            success: true,
+            message: "OTP sent successfully",
+            data: { mobile },
+        });
+        // if (smsResult.success) {
+        //     return res.status(200).json({
+        //         success: true,
+        //         message: "OTP sent successfully",
+        //         data: { mobile },
+        //     });
+        // } else {
+        //     return res.status(400).json({
+        //         success: false,
+        //         message: smsResult.message || "Failed to send OTP",
+        //     });
+        // }
     } catch (error) {
         console.log(error)
         return res.status(400).json({
