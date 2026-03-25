@@ -1,10 +1,9 @@
 import express from "express";
 import {
-  addItemToCart,
-  updateCartItemQuantity,
-  removeItemFromCart,
+  addToCart,
   getCart,
-  checkoutCart
+  removeCartItem,
+  updateCartItem
 } from "../controllers/cart.controller.js";
 
 import { protect } from "../middlewares/auth.middleware.js";
@@ -12,10 +11,13 @@ import { protect } from "../middlewares/auth.middleware.js";
 
 const cartRoute = express.Router();
 
-cartRoute.post("/add", protect, addItemToCart);
-cartRoute.post("/update", protect, updateCartItemQuantity);
-cartRoute.post("/remove", protect, removeItemFromCart);
 cartRoute.get("/", protect, getCart);
-cartRoute.post("/checkout", protect, checkoutCart);
+cartRoute.post("/add", protect, addToCart);
+cartRoute.post("/updateCart", protect, updateCartItem);
+cartRoute.post("/removecart/:id", protect, removeCartItem);
+// cartRoute.post("/update", protect, updateCartItemQuantity);
+// cartRoute.post("/remove", protect, removeItemFromCart);
+// cartRoute.get("/", protect, getCart);
+// cartRoute.post("/checkout", protect, checkoutCart);
 
 export default cartRoute;

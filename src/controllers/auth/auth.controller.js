@@ -9,10 +9,11 @@ import bcrypt from "bcryptjs/dist/bcrypt.js";
 import sellerModal from "../../models/roleWiseModal/seller.modal.js";
 import riderModal from "../../models/roleWiseModal/rider.modal.js";
 import orderModal from "../../models/order.modal.js";
+import walletSystemModal from "../../models/walletSystem.modal.js";
 /* =========================
    JWT TOKEN GENERATOR
 ========================= */
-const generateToken = (user, sessionId) => {
+export const generateToken = (user, sessionId) => {
     return jwt.sign(
         {
             id: user._id,
@@ -26,54 +27,77 @@ const generateToken = (user, sessionId) => {
 };
 
 
-export const register = async (req, res) => {
+
+
+export const registerViaOtp = async (req, res) => {
     try {
-        const {
-            name,
-            email,
-            password,
-            mobile,
-            isexists = false
-        } = req.body;
-        if (!name || !email || !password || !mobile) {
+        const { mobile, otp } = req.body;
+
+        if (!mobile || !otp) {
             return res.status(400).json({
                 success: false,
-                message: "All fields required"
+                message: "Mobile and OTP required"
             });
+        }
+
+        const otpRecord = await otpModal.findOne({ mobile, otp });
+
+        if (!otpRecord || otpRecord.expiresAt < Date.now()) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid or expired OTP"
+            });
+        }
+
+        // ✅ OTP valid → delete it
+        await otpModal.deleteMany({ mobile });
+
+        let user = await userModal.findOne({ mobile });
+
+        // 🔥 NEW USER → AUTO REGISTER
+        if (!user) {
+            user = await userModal.create({
+                mobile,
+                role: "customer"
+            });
+
+            // ✅ wallet create
+            await walletSystemModal.updateOne(
+                { ownerId: user._id, ownerType: user.role },
+                {
+                    $setOnInsert: {
+                        ownerId: user._id,
+                        ownerType: user.role,
+                        availableBalance: 0,
+                        superCoinBalance: 0,
+                        lockedBalance: 0,
+                        currency: "INR",
+                        status: "active"
+                    }
+                },
+                { upsert: true }
+            );
+        } else {
+            // ✅ existing user → wallet ensure
+            await walletSystemModal.updateOne(
+                { ownerId: user._id, ownerType: user.role },
+                {
+                    $setOnInsert: {
+                        ownerId: user._id,
+                        ownerType: user.role,
+                        availableBalance: 0,
+                        superCoinBalance: 0,
+                        lockedBalance: 0,
+                        currency: "INR",
+                        status: "active"
+                    }
+                },
+                { upsert: true }
+            );
         }
 
         const sessionId = crypto.randomUUID();
-
-        const existingUser = await userModal.findOne({
-            $or: [{ email }, { mobile }]
-        });
-
-        if (existingUser && isexists === "true") {
-            return res.status(200).json({
-                success: true,
-                message: `Welcome Back ${existingUser.name || "user"}, continuing onboarding`,
-                token,
-                user: existingUser
-            });
-        }
-
-        if (existingUser) {
-            return res.status(409).json({
-                success: false,
-                message: "User already exists"
-            });
-        }
-
-        const user = await userModal.create({
-            name,
-            email,
-            password,
-            mobile: Number(mobile),
-            role: "customer"
-        });
-
         const token = generateToken(user, sessionId);
-
         // if (redis) {
         //     await redis.setex(
         //         `USER_AUTH_SESSION:${user._id}`,
@@ -81,10 +105,9 @@ export const register = async (req, res) => {
         //         sessionId
         //     );
         // }
-
-        return res.status(201).json({
+        return res.status(200).json({
             success: true,
-            message: "Registration success",
+            message: "Login successful",
             token,
             user
         });
@@ -217,7 +240,7 @@ export const login = async (req, res) => {
             if (!user.password) {
                 return res.status(400).json({
                     success: false,
-                    message: "Password login not available for this account"
+                    message: "Password login not available for this account, use OTP"
                 });
             }
 

@@ -1,7 +1,7 @@
-import orderModal from "../../models/order.modal";
-import riderModal from "../../models/roleWiseModal/rider.modal";
+import orderModal from "../../models/order.modal.js";
+import riderModal from "../../models/roleWiseModal/rider.modal.js";
 
-export const getRiderDashboard = async (req, res) => {
+export const getRiderDashBoard = async (req, res) => {
     try {
 
         const rider = await riderModal.findOne({ userId: req.user.id });

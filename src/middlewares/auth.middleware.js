@@ -43,16 +43,16 @@ export const protect = async (req, res, next) => {
       });
     }
     let redisSession = null
-    if (redis) {
-      redisSession = await redis.get(`USER_AUTH_SESSION:${user._id}`);
-      if (!redisSession || redisSession !== decoded.sessionId) {
-        return res.status(401).json({
-          success: false,
-          code: "FORCE_LOGOUT",
-          message: "You are logged in from another device"
-        });
-      }
-    }
+    // if (redis) {
+    //   redisSession = await redis.get(`USER_AUTH_SESSION:${user._id}`);
+    //   if (!redisSession || redisSession !== decoded.sessionId) {
+    //     return res.status(401).json({
+    //       success: false,
+    //       code: "FORCE_LOGOUT",
+    //       message: "You are logged in another device"
+    //     });
+    //   }
+    // }
 
     // 5️⃣ Attach to request
     req.user = {

@@ -2,7 +2,7 @@ import express from "express";
 import { protect } from "../middlewares/auth.middleware.js";
 import { isSuperAdmin } from "../middlewares/role.middleware.js";
 import { upload } from "../config/multer.js";
-import { getSubCategoriesByCategory, subcreateCategory, subdeleteCategory, subgetCategories, subgetCategoryById, subupdateCategory } from "../controllers/subcategory.js";
+import { getSubCategoriesByCategory, getsubCategoriesOnlyIdName, subcreateCategory, subdeleteCategory, subgetCategories, subgetCategoryById, subupdateCategory } from "../controllers/subcategory.js";
 
 const subcategoryRoute = express.Router();
 
@@ -19,6 +19,7 @@ subcategoryRoute.post(
 );
 /* PUBLIC */
 subcategoryRoute.get("/", subgetCategories);
+subcategoryRoute.get("/nameonly", getsubCategoriesOnlyIdName);
 subcategoryRoute.get("/by-category/:categoryId", getSubCategoriesByCategory);
 subcategoryRoute.get("/:id", subgetCategoryById);
 

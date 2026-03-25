@@ -8,8 +8,10 @@ import {
     updateVariant,
     deleteVariant,
     getVariantById,
-    getAllVariants
+    getAllVariants,
+    updateVariantStatusByAdmin
 } from "../controllers/addvariant.js";
+import { isSuperAdmin } from "../middlewares/role.middleware.js";
 
 const addvarintRoute = express.Router();
 
@@ -25,9 +27,9 @@ addvarintRoute.get("/:id", getVariantById);
 
 /* ADMIN */
 addvarintRoute.get(
-  "/admin/variants",
-  protect,
-  getAllVariants
+    "/admin/variants",
+    // protect,
+    getAllVariants
 );
 
 
@@ -46,10 +48,17 @@ addvarintRoute.put(
     updateVariant
 );
 
+addvarintRoute.put(
+    "/admin/variant/:id/status",
+    protect,
+    isSuperAdmin,   // ✅ only admin
+    updateVariantStatusByAdmin
+);
 addvarintRoute.delete(
     "/admin/variants/:id",
     protect,
     deleteVariant
 );
+
 
 export default addvarintRoute;

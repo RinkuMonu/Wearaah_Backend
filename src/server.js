@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import connectDB from "./config/db.js";
+import http from "http";
 // import productRoutes from "./routes/product.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
 import authRoute from "./routes/auth.route.js";
@@ -23,12 +24,28 @@ import otproute from "./routes/otp.route.js";
 import riderkycRoute from "./routes/riderKyc.route.js";
 import sellerkycRoute from "./routes/sellerKyc.route.js";
 import brandRoute from "./routes/brand.route.js";
-import wearRoute from "./routes/wearType.route.js";
+import matrixDashboard from "./routes/matrix.dashboard.js";
+import leadrouter from "./routes/leadControl.route.js";
+import orderQueue from "./queues/orderQueues/order.queue.js";
+// import "./queues/orderQueues/order.worker.js"
+import walletTrancation from "./routes/ReportsRoute/report.route.js";
+const app = express();
+const server = http.createServer(app);
 dotenv.config();
 connectDB();
 
+import { initSocket } from "./config/socket.js";
+// const waitingCount = await orderQueue.getWaitingCount();
+// const waiting = await orderQueue.getWaiting();
+// const counts = await orderQueue.getJobCounts();
+// console.log("Waiting jobs:", waitingCount);
+// console.log("Waiting jobs:", waiting);
+// console.log(counts);
 
-const app = express();
+// await orderQueue.drain();
+// console.log(process.listenerCount("exit"));
+
+
 const allowedOrigins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
@@ -51,12 +68,12 @@ app.use(
         allowedHeaders: ["Content-Type", "Authorization"],
     })
 );
-
+initSocket(server);
 
 // app.use(cors("*"));
 app.use(express.json());
 app.get("/", async (req, res) => {
-    return res.json({ message: "well-come lionis" });
+    return res.json({ message: "well-come Wearaah" });
 });
 app.get("/health/redis", async (req, res) => {
     if (!redis) {
@@ -76,15 +93,17 @@ app.get("/health/redis", async (req, res) => {
 
 //service routes
 app.use("/uploads", express.static("uploads"));
+
 app.use("/api/otp", otproute);
 // auth routes
 app.use("/api/auth", authRoute);
+//seller routes
+app.use("/api/das", matrixDashboard);
 //seller routes
 app.use("/api/seller", sellerkycRoute);
 //rider routes
 app.use("/api/rider", riderkycRoute);
 //product routes
-app.use("/api/wear/type", wearRoute);
 app.use("/api/brand", brandRoute);
 app.use("/api/product", adminRoutes);
 app.use("/api/category", categoryRoute);
@@ -92,6 +111,7 @@ app.use("/api/subcategory", subcategoryRoute);
 app.use("/api/variant", addvarintRoute);
 // other routes
 app.use("/api/order", orderRoutes);
+app.use("/api/trancation", walletTrancation);
 app.use("/api/contact", contactRoutes);
 app.use("/api/banner", bannerRoutes);
 app.use("/api/faq", faqRoutes);
@@ -100,9 +120,28 @@ app.use("/api/review", reviewRoutes);
 app.use("/api/wishlist", wishlistRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/coupon", couponRoutes);
+// Lead route
+app.use("/api/leads", leadrouter)
 
+app.use((err, req, res, next) => {
+    if (err instanceof multer.MulterError) {
+        return res.status(400).json({
+            success: false,
+            message: "File too large (max 5MB)"
+        });
+    }
+    if (err) {
+        return res.status(400).json({
+            success: false,
+            message: err.message
+        });
+    }
 
+    next();
+});
 export default app;
 
 
-app.listen(5000, () => console.log("Server running on port 5000"));
+server.listen(5000, () => {
+    console.log("Server running on port 5000");
+});

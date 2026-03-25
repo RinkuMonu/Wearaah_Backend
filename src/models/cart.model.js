@@ -2,53 +2,74 @@ import mongoose from "mongoose";
 
 const cartItemSchema = new mongoose.Schema(
   {
-    variant: {
+    /* 🔗 RELATION */
+    productId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Product",
+      required: true
+    },
+
+    variantId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "ProductVariant",
       required: true
     },
+
+    sellerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Seller",
+      required: true
+    },
+
+    /* 📸 SNAPSHOTS (SUPER IMPORTANT) */
+
+    mrp: {
+      type: Number,
+      required: true
+    },
+
+    sellingPrice: {
+      type: Number,
+      required: true
+    },
+
     quantity: {
       type: Number,
-      min: 1,
-      required: true
+      required: true,
+      min: 1
     },
-    price: {
-      type: Number, // snapshot price
-      required: true
-    },
-    total: {
+
+    finalPrice: {
       type: Number,
       required: true
-    }
-  },
-  { _id: false }
-);
+    }, // price * qty
 
+    isActive: {
+      type: Boolean,
+      default: true
+    }
+
+  },
+  { _id: true }
+);
+ 
 const cartSchema = new mongoose.Schema(
   {
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
-      unique: true
     },
     items: [cartItemSchema],
-    totalAmount: {
+    grandTotal: {
       type: Number,
-      default: 0
-    },
-    isCheckedOut: {
-      type: Boolean,
-      default: false
+      required: true
     }
   },
   { timestamps: true }
 );
+cartSchema.index({ user: 1 }, { unique: true });
+cartSchema.index({ "items.variantId": 1 });
+cartSchema.index({ "items.sellerId": 1 });
 
-cartSchema.pre("save", function (next) {
-  this.totalAmount = this.items.reduce((sum, item) => sum + item.total, 0);
-  next();
-});
-
-const Cart = mongoose.model("Cart", cartSchema);
-export default Cart;
+export default mongoose.model("CartModal", cartSchema);

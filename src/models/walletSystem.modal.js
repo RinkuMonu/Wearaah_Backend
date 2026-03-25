@@ -10,7 +10,7 @@ const walletSchema = new mongoose.Schema({
 
     ownerType: {
         type: String,
-        enum: ["customer", "seller", "delivery_partner", "platform"],
+        enum: ["customer", "seller", "delivery_partner", "platform", "superadmin"],
         required: true,
         index: true,
     },
@@ -18,23 +18,15 @@ const walletSchema = new mongoose.Schema({
     availableBalance: {
         type: Number,
         default: 0,
-        min: 0
+    },
+    superCoinBalance: {
+        type: Number,
+        default: 0,
     },
 
     lockedBalance: {
         type: Number,
-        default: 0,
-        min: 0 // orders not delivered yet balance locked till 7days after deliver
-    },
-
-    totalCredited: {
-        type: Number,
-        default: 0
-    },
-
-    totalDebited: {
-        type: Number,
-        default: 0
+        default: 0,// orders not delivered yet balance locked till 7days after deliver
     },
 
     currency: {

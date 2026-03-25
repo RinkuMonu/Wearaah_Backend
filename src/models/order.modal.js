@@ -77,27 +77,33 @@ const orderSchema = new mongoose.Schema(
           required: true
         },
 
+        mrp: {
+          type: Number,
+          required: true,
+          min: 0
+        },
+        sellingPrice: {
+          type: Number,
+          required: true,
+          min: 0
+        },
+
         quantity: {
           type: Number,
           required: true,
           min: 1
         },
 
-        mrp: {
+        totalAmountofqty: {
           type: Number,
           required: true,
           min: 0
         },
-        discountPrice: {
-          type: Number,
+        sku: {
+          type: String,
           required: true,
-          min: 0
         },
-        finalprice: {
-          type: Number,
-          required: true,
-          min: 0
-        },
+
       }
     ],
 
@@ -106,10 +112,24 @@ const orderSchema = new mongoose.Schema(
       required: true
     },
 
+    finalAmoutAfterCoinDeliverycharges: {
+      type: Number,
+      required: true
+    },
+
+    coinUsed: {
+      type: Number,
+      required: true,
+    },
+    walletUsed: {
+      type: Number,
+      required: true,
+    },
+
     platformCommission: {
       type: Number,
-      min: 0
-      // required: true
+      min: 0,
+      required: true
     },
 
     sellerAmount: {
@@ -118,15 +138,14 @@ const orderSchema = new mongoose.Schema(
       min: 0
     },
 
-    riderAmount: {
+    deliveryCharge: {
       type: Number,
-      required: true,
-      min: 0
+      default: 0
     },
 
     paymentMethod: {
       type: String,
-      enum: ["COD", "UPI", "CARD", "NETBANKING"],
+      enum: ["COD", "UPI", "CARD", "NETBANKING", "WALLET"],
       default: "UPI",
       required: true,
     },
@@ -140,11 +159,6 @@ const orderSchema = new mongoose.Schema(
 
     isPaid: { type: Boolean, default: false },
 
-    codAmountCollected: {
-      type: Boolean,
-      default: false
-    },
-
     settlementStatus: {
       type: String,
       enum: ["locked", "settled", "refunded"],
@@ -154,7 +168,7 @@ const orderSchema = new mongoose.Schema(
 
     orderStatus: {
       type: String,
-      enum: ["placed", "confirmed", "packed", "shipped", "delivered", "cancelled", "returned"],
+      enum: ["placed", "accepted_by_seller", "packed", "ready_for_pickup", "assigned_to_rider", "picked", "out_for_delivery", "delivered", "shipped", "cancelled", "returned"],
       default: "placed",
       index: true
     },
@@ -162,6 +176,11 @@ const orderSchema = new mongoose.Schema(
       type: Number,
       min: 0
     },
+    isSeenBySeller: {
+      type: Boolean,
+      default: false,
+    },
+
     refundedAt: Date,
 
     pgOrderId: String,
@@ -176,10 +195,14 @@ const orderSchema = new mongoose.Schema(
 
     cancelReason: String,
     returnReason: String,
+    riderAssignedAt: Date,
+    pickedAt: Date,
+    outForDeliveryAt: Date,
 
+    paymentTransactionId: String,
+    refundTransactionId: Date,
     sellerSettledAt: Date,
     riderSettledAt: Date,
-    // shippingAddress: shippingAddressSchema,// ye abi pending hai
   },
   { timestamps: true }
 );
