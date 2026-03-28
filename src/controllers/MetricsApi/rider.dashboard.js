@@ -1,16 +1,17 @@
 import orderModal from "../../models/order.modal.js";
-import riderModal from "../../models/roleWiseModal/rider.modal.js";
+import walletSystemModal from "../../models/walletSystem.modal.js";
 
 export const getRiderDashBoard = async (req, res) => {
     try {
 
-        const rider = await riderModal.findOne({ userId: req.user.id });
+        // const rider = await riderModal.findOne({ userId: req.user.id });
 
-        if (!rider) {
-            return res.status(404).json({ message: "Rider not found" });
-        }
+        // if (!rider) {
+        //     return res.status(404).json({ message: "Rider not found" });
+        // }
 
-        const riderId = rider._id;
+        // const riderId = rider._id;
+        const riderId = "69930f6dbc49845122265455";
 
         const [
             totalDeliveries,
@@ -25,7 +26,7 @@ export const getRiderDashBoard = async (req, res) => {
             orderModal.aggregate([{ $match: { riderId, paymentStatus: "paid" } },
             { $group: { _id: null, total: { $sum: "$riderAmount" } } }
             ]),
-            walletModal.findOne({ ownerId: req.user.id })
+            walletSystemModal.findOne({ ownerId: req.user.id, ownerType: "delivery_partner" })
         ]);
 
         res.json({

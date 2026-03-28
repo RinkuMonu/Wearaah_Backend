@@ -9,9 +9,10 @@ import {
     deleteVariant,
     getVariantById,
     getAllVariants,
-    updateVariantStatusByAdmin
+    updateVariantStatusByAdmin,
+    updateVariantStock
 } from "../controllers/addvariant.js";
-import { isSuperAdmin } from "../middlewares/role.middleware.js";
+import { isSeller, isSuperAdmin } from "../middlewares/role.middleware.js";
 
 const addvarintRoute = express.Router();
 
@@ -29,11 +30,13 @@ addvarintRoute.get("/:id", getVariantById);
 addvarintRoute.get(
     "/admin/variants",
     // protect,
+    // isSeller,
+    // isSuperAdmin,
     getAllVariants
 );
 
 
-/* ADMIN */
+/* SELLER */
 addvarintRoute.post(
     "/admin/products/:productId/variants",
     protect,
@@ -47,6 +50,9 @@ addvarintRoute.put(
     upload.array("variantImages", 5),
     updateVariant
 );
+
+// bulkStock update using bulkwrite
+addvarintRoute.put("/bulkstockupdate", protect, updateVariantStock);
 
 addvarintRoute.put(
     "/admin/variant/:id/status",

@@ -14,7 +14,7 @@ import superCoin from "../models/superCoin.js";
 import WalletTransactionModal from "../models/WalletTransaction.modal.js";
 import { getIO } from "../config/socket.js";
 
-
+// place order by customer
 export const createOrder = async (req, res) => {
   let session;
   try {
@@ -220,9 +220,8 @@ export const createOrder = async (req, res) => {
     sellerAmount =
       Number((totalAmount - platformCommission).toFixed(2));
 
-    // platformCommission = Math.max(platformCommission - coinUsed, 0);
 
-    // STEP 9: Final payable amount
+    // STEP 9: Final payable amount jo customer krega pay
 
     const discountedAmount = totalAmount - coinUsed;
     finalAmount =
@@ -270,6 +269,7 @@ export const createOrder = async (req, res) => {
       coinUsed,
       walletUsed: walletUsedAmount,
       finalAmoutAfterCoinDeliverycharges: finalAmount,
+      gatewayAmount,
       platformCommission,
       sellerAmount,
     });
@@ -277,7 +277,7 @@ export const createOrder = async (req, res) => {
     await order.save({ session });
 
     if (walletUsedAmount > 0) {
-
+      const updatedWallet = await walletSystemModal.findById(wallet._id).select("availableBalance").session(session);
       await WalletTransactionModal.create([{
         walletId: wallet._id,
         ownerId: req.user.id,
@@ -288,7 +288,7 @@ export const createOrder = async (req, res) => {
         referenceId: order._id,
         referenceModel: "Order",
         status: "completed",
-        balanceAfter: wallet.availableBalance
+        balanceAfter: updatedWallet.availableBalance
       }], { session });
 
     }
@@ -341,9 +341,79 @@ export const createOrder = async (req, res) => {
   }
 };
 
-// USER ORDERS
-// controllers/order.controller.js
+// Order Cancel
+export const cancelOrder = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const { reason } = req.body;
+    if (!reason) {
+      return res.status(400).json({ message: "Please provide a reason for cancelling the order." });
+    }
 
+    const order = await orderModal.findById(id);
+
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+    // bkl order khud ka hona chahiye
+    if (order.customerId.toString() !== userId.toString()) {
+      return res.status(403).json({ message: "Not allowed" });
+    }
+
+    // chutiya fruad to nhi kr rha hna
+    if (order.orderStatus === "cancelled" || order.paymentStatus === "refunded") {
+      return res.status(400).json({ message: "Order already cancelled & refunded" });
+    }
+
+    // mkc bar bar cancal ni hona chahiye
+    if (["shipped", "delivered"].includes(order.orderStatus)) {
+      return res.status(400).json({
+        message: "Order cannot be cancelled at this moment"
+      });
+    }
+
+    // 💰 refund calculation
+    let walletRefund = 0;
+    let upiRefund = 0;
+    if (order.paymentStatus === "paid") {
+      walletRefund = order.walletUsed || 0;
+      upiRefund = order.gatewayAmount || 0;
+    }
+    const totalRefund = walletRefund + upiRefund;
+    order.paymentStatus = "refunded";
+    order.orderStatus = "cancelled";
+    order.cancelReason = reason;
+    order.refundAmount = totalRefund;
+    order.refundedAt = new Date();
+    await order.save();
+
+    await orderQueue.add("order_cancelled", {
+      orderId: order._id,
+      orderNumber: order.orderNumber,
+      items: order.items,
+      walletRefund,
+      upiRefund,
+      userId: order.customerId,
+      paymentMethod: order.paymentMethod
+    }, {
+      jobId: `cancel-${order._id}`
+    });
+
+    return res.json({
+      success: true,
+      message: "Order cancelled successfully"
+    });
+
+  } catch (err) {
+    return res.status(500).json({
+      message: err.message
+    });
+  }
+};
+
+
+// Get USER ORDERS  
 export const getOrders = async (req, res) => {
   try {
 
@@ -527,6 +597,7 @@ export const getOrderById = async (req, res) => {
   res.json(order);
 };
 
+//offline Purchase
 const generateInvoiceNumber = async (sellerPrefix, session) => {
 
   const counter = await counterModel.findOneAndUpdate(
@@ -540,9 +611,7 @@ const generateInvoiceNumber = async (sellerPrefix, session) => {
   return `${sellerPrefix}-INV-${paddedSeq}`;
 };
 
-
-
-
+//offline Purchase
 export const OfflinePurchaseInvoiceGen = async (req, res) => {
   const session = await mongoose.startSession();
 
@@ -732,40 +801,35 @@ export const OfflinePurchaseInvoiceGen = async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
-    try {
-
-      await sendInvoiceEmail({
-        variables: {
-
-          shop_name: seller.shopName,
-          shop_address: seller.pickupDelivery?.street || "N/A",
-          shop_gstin: seller.GSTIN || "N/A",
-
-          invoice_number: invoice[0].invoiceNumber,
-          invoice_date: new Date(invoice[0].createdAt).toLocaleDateString(),
-
-          customer_name: customerName,
-          customer_mobile: customerMobile,
-          customer_email: customerEmail,
-
-          items: invoiceItems,
-
-          subtotal: subtotalAmount,
-          cgst_total: Number((gstAmount / 2).toFixed(2)),
-          sgst_total: Number((gstAmount / 2).toFixed(2)),
-          gst_amount: gstAmount,
-
-          total_discount: totalDiscount,
-
-          grand_total: grandTotal,
-
-          payment_mode: paymentMode
-        }
-      });
-
-    } catch (emailErr) {
-      console.error("Email failed:", emailErr.message);
-    }
+    await orderQueue.add("order_offline_Purchase_send_mail", {
+      shop_name: seller.shopName,
+      shop_address: seller.pickupDelivery?.street || "N/A",
+      shop_gstin: seller.GSTIN || "N/A",
+      invoice_number: invoice[0].invoiceNumber,
+      invoice_date: new Date(invoice[0].createdAt).toLocaleDateString(),
+      customer_name: customerName,
+      customer_mobile: customerMobile,
+      customer_email: customerEmail,
+      items: invoiceItems,
+      subtotal: subtotalAmount,
+      cgst_total: Number((gstAmount / 2).toFixed(2)),
+      sgst_total: Number((gstAmount / 2).toFixed(2)),
+      gst_amount: gstAmount,
+      total_discount: totalDiscount,
+      grand_total: grandTotal,
+      payment_mode: paymentMode
+    }, {
+      jobId: `invoice-${invoice[0].invoiceNumber}`
+    })
+    // {                                   // options
+    //   jobId: "invoice-INV123",
+    //     attempts: 3,
+    //     priority: 1,
+    //       backoff: {
+    //     type: "exponential",
+    //       delay: 2000
+    //   }
+    // }
 
     return res.status(201).json({
       success: true,
@@ -788,9 +852,6 @@ export const OfflinePurchaseInvoiceGen = async (req, res) => {
   }
 };
 
-
-
-
 // GET /order/unseen
 export const getUnseenOrders = async (req, res) => {
   try {
@@ -810,8 +871,6 @@ export const getUnseenOrders = async (req, res) => {
   }
 };
 
-
-
 // PUT /order/mark-seen
 export const markOrdersSeen = async (req, res) => {
   try {
@@ -825,9 +884,6 @@ export const markOrdersSeen = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
-
-
-
 
 // order accept by seller
 export const acceptOrderBySeller = async (req, res) => {
@@ -900,24 +956,6 @@ export const acceptOrderBySeller = async (req, res) => {
 
   }
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 export const deleteOrder = async (req, res) => {

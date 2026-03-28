@@ -36,6 +36,7 @@ connectDB();
 
 import { initSocket } from "./config/socket.js";
 import multer from "multer";
+import withdrawalReq from "./routes/withdrawal.routes.js";
 // const waitingCount = await orderQueue.getWaitingCount();
 // const waiting = await orderQueue.getWaiting();
 // const counts = await orderQueue.getJobCounts();
@@ -109,13 +110,15 @@ app.use("/api/product", adminRoutes);
 app.use("/api/category", categoryRoute);
 app.use("/api/subcategory", subcategoryRoute);
 app.use("/api/variant", addvarintRoute);
+// withdrawal request
+app.use("/api/withdrawalreq", withdrawalReq)
 // other routes
 app.use("/api/order", orderRoutes);
 app.use("/api/trancation", walletTrancation);
 app.use("/api/contact", contactRoutes);
 app.use("/api/banner", bannerRoutes);
 app.use("/api/faq", faqRoutes);
-app.use("/api/newsletter", newsletterRoutes); 
+app.use("/api/newsletter", newsletterRoutes);
 app.use("/api/review", reviewRoutes);
 app.use("/api/wishlist", wishlistRoutes);
 app.use("/api/cart", cartRoutes);

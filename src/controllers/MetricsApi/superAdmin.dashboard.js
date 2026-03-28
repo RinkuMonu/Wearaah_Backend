@@ -1,3 +1,10 @@
+import SRleadModal from "../../models/leadModal/SRlead.modal.js";
+import orderModal from "../../models/order.modal.js";
+import productModel from "../../models/product.model.js";
+import riderModal from "../../models/roleWiseModal/rider.modal.js";
+import sellerModal from "../../models/roleWiseModal/seller.modal.js";
+import userModal from "../../models/roleWiseModal/user.modal.js";
+
 export const getSuperAdminDashboard = async (req, res) => {
     try {
         const todayStart = new Date();
@@ -12,7 +19,8 @@ export const getSuperAdminDashboard = async (req, res) => {
             pendingSellerKyc,
             pendingRiderKyc,
             totalOrders,
-            orderStats
+            totalLeadForKyc,
+            orderStats,
         ] = await Promise.all([
             userModal.estimatedDocumentCount(),
             userModal.countDocuments({ role: "customer" }),
@@ -22,6 +30,7 @@ export const getSuperAdminDashboard = async (req, res) => {
             sellerModal.countDocuments({ kycStatus: "pending" }),
             riderModal.countDocuments({ kycStatus: "pending" }),
             orderModal.estimatedDocumentCount(),
+            SRleadModal.estimatedDocumentCount(),
             orderModal.aggregate([
                 {
                     $facet: {
@@ -66,9 +75,10 @@ export const getSuperAdminDashboard = async (req, res) => {
                 totalSellers,
                 totalRiders,
                 totalProducts,
-                totalOrders,
                 pendingSellerKyc,
                 pendingRiderKyc,
+                totalOrders,
+                totalLeadForKyc,
                 todayOrders: stats.todayOrders[0]?.count || 0,
                 deliveredOrders: statusMap.delivered || 0,
                 canceledOrders: statusMap.cancelled || 0,
@@ -84,6 +94,6 @@ export const getSuperAdminDashboard = async (req, res) => {
 
     } catch (err) {
         console.error("Error in getSuperAdminDashboard:", err);
-        res.status(500).json({ message: err.message });
+        return res.status(500).json({ message: err.message });
     }
 };

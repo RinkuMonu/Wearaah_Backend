@@ -7,7 +7,8 @@ import {
   getOrders,
   acceptOrderBySeller,
   getUnseenOrders,
-  markOrdersSeen
+  markOrdersSeen,
+  cancelOrder
 } from "../controllers/order.controller.js";
 import { protect } from "../middlewares/auth.middleware.js";
 import { isSeller, isSuperAdmin } from "../middlewares/role.middleware.js";
@@ -16,6 +17,7 @@ const router = express.Router();
 
 // User
 router.post("/", protect, createOrder);
+router.post("/cancelorder/:id", protect, cancelOrder);
 router.get("/my", protect, getOrders);
 // seller get unseen order//
 router.get("/unseen", protect, getUnseenOrders);

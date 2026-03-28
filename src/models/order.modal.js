@@ -117,6 +117,11 @@ const orderSchema = new mongoose.Schema(
       required: true
     },
 
+    gatewayAmount: {
+      type: Number,
+      required: true
+    },
+
     coinUsed: {
       type: Number,
       required: true,
@@ -157,6 +162,12 @@ const orderSchema = new mongoose.Schema(
       index: true
     },
 
+    refundStatus: {
+      type: String,
+      enum: ["pending", "processing", "completed"],
+      default: "pending"
+    },
+
     isPaid: { type: Boolean, default: false },
 
     settlementStatus: {
@@ -194,11 +205,9 @@ const orderSchema = new mongoose.Schema(
     deliveredAt: Date,
 
     cancelReason: String,
-    returnReason: String,
     riderAssignedAt: Date,
     pickedAt: Date,
     outForDeliveryAt: Date,
-
     paymentTransactionId: String,
     refundTransactionId: Date,
     sellerSettledAt: Date,

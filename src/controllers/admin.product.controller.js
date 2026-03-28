@@ -212,9 +212,9 @@ export const getProducts = async (req, res) => {
       isTopRated
     } = req.query;
 
-    // const isPrivileged =
-    //   req.user?.role === "superAdmin" ||
-    //   req.user?.role === "seller";
+      // const isPrivileged =
+      //   req.user?.role === "superAdmin" ||
+      //   req.user?.role === "seller";
     const isPrivileged = false
 
     const pageNumber = Number(page);

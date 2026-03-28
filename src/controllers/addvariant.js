@@ -506,6 +506,63 @@ export const updateVariant = async (req, res) => {
 
     }
 };
+
+/// update only Stock/ bulk stock using bulkwrite
+/// update only Stock/ bulk stock using bulkwrite
+
+
+export const updateVariantStock = async (req, res) => {
+    try {
+
+        const { variants } = req.body;
+
+        if (!Array.isArray(variants) || variants.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Variants array required"
+            });
+        }
+
+        const bulkOps = [];
+
+        for (let item of variants) {
+
+            if (!mongoose.Types.ObjectId.isValid(item.id)) continue;
+
+            const newStock = Number(item.stock);
+
+            if (isNaN(newStock) || newStock < 0) continue;
+
+            bulkOps.push({
+                updateOne: {
+                    filter: { _id: item.id },
+                    update: { stock: newStock }
+                }
+            });
+        }
+
+        if (bulkOps.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "No valid variants to update"
+            });
+        }
+
+        await ProductVariant.bulkWrite(bulkOps);
+
+        return res.status(200).json({
+            success: true,
+            message: "Stock updated successfully"
+        });
+
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to update stock"
+        });
+    }
+};
 /* =========================
    GET VARIANTS BY PRODUCT
    GET /api/products/:productId/variants
@@ -571,22 +628,19 @@ export const getAllVariants = async (req, res) => {
             search = "",
             page = 1,
             limit = 10,
-
-            // 🔥 NEW PARAMS
             sort = "newest",
             color,
             size,
             minPrice,
             maxPrice,
             lowStock,
-            category
-
+            category,
+            status
         } = req.query;
 
         const query = {};
 
         /* ---------------- SEARCH ---------------- */
-
         if (search) {
             query.$or = [
                 { variantTitle: { $regex: search, $options: "i" } },
@@ -596,14 +650,9 @@ export const getAllVariants = async (req, res) => {
         }
 
         /* ---------------- FILTERS ---------------- */
-
-        if (color) {
-            query.color = color.toLowerCase();
-        }
-
-        if (size) {
-            query.size = size.toUpperCase();
-        }
+        if (color) query.color = color.toLowerCase();
+        if (size) query.size = size.toUpperCase();
+        if (status) query.status = status.toLowerCase();
 
         if (minPrice || maxPrice) {
             query["pricing.sellingPrice"] = {};
@@ -616,7 +665,6 @@ export const getAllVariants = async (req, res) => {
         }
 
         /* ---------------- SORT ---------------- */
-
         let sortOption = { createdAt: -1 };
 
         switch (sort) {
@@ -639,14 +687,9 @@ export const getAllVariants = async (req, res) => {
                 sortOption = { createdAt: -1 };
         }
 
-        /* ---------------- PAGINATION ---------------- */
-
         const skip = (page - 1) * limit;
 
-        /* ---------------- QUERY WITH CATEGORY ---------------- */
-
         const [variantsRaw, total] = await Promise.all([
-
             ProductVariant.find(query)
                 .populate({
                     path: "productId",
@@ -659,20 +702,41 @@ export const getAllVariants = async (req, res) => {
                 .lean(),
 
             ProductVariant.countDocuments(query)
-
         ]);
 
-        /* ---------------- REMOVE NULL PRODUCTS ---------------- */
-
         const variants = variantsRaw.filter(v => v.productId !== null);
+        const totalVariants = await ProductVariant.countDocuments();
+        const inStock = await ProductVariant.countDocuments({
+            stock: { $gt: 5 }
+        });
+
+        const lowStockCount = await ProductVariant.countDocuments({
+            stock: { $gt: 0, $lte: 5 }
+        });
+
+        const outOfStock = await ProductVariant.countDocuments({
+            stock: 0
+        });
+
+        const pendingQC = await ProductVariant.countDocuments({
+            status: "pending",
+            isActive: true
+        });
 
         return res.status(200).json({
             success: true,
             page: Number(page),
             limit: Number(limit),
-            totalVariants: variants.length, // filtered count
+            totalVariants: variants.length,
             totalPages: Math.ceil(total / limit),
-            variants
+            variants,
+            stats: {
+                total: totalVariants,
+                inStock,
+                lowStock: lowStockCount,
+                outOfStock,
+                pendingQC
+            }
         });
 
     } catch (error) {
