@@ -4,12 +4,12 @@ import redis from "../../middlewares/redis.js";
 const orderQueue = new Queue("orderQueue", {
     connection: redis,
     defaultJobOptions: {
-        removeOnComplete: true,
-        removeOnFail: false,
+        removeOnComplete: 50,
+        removeOnFail: 50,
         attempts: 3,
         backoff: {
             type: "exponential",
-            delay: 2000
+            delay: 3000
         }
     }
 });

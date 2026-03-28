@@ -17,7 +17,6 @@ export const initSocket = (server) => {
         socket.on("join", (userId) => {
             if (!userId) return;
 
-            // 🔥 clean old rooms
             socket.rooms.forEach((room) => {
                 if (room !== socket.id) {
                     socket.leave(room);

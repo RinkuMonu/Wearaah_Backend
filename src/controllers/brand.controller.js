@@ -118,7 +118,7 @@ export const getBrandsNameID = async (req, res) => {
         }
 
         const brands = await Brand.find(query)
-            .sort({ createdAt: -1 })
+            .sort({ createdAt: -1 }).select("_id name")
 
         return res.json({
             success: true,

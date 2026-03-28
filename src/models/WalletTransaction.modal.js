@@ -19,13 +19,13 @@ const walletTransactionSchema = new mongoose.Schema({
     },
     type: {
         type: String,
-        enum: ["credit", "debit", "lock", "top-up", "unlock", "settlement", "refund", "commission", "withdrawal"],
+        enum: ["credit", "debit"],
         required: true
     },
 
     reasonSource: {
         type: String,
-        enum: ["order_payment", "Withdrawal", "delivery_earning", "refund", "commission", "wallet_topup", "penalty"],
+        enum: ["order_payment", "delivery_earning", "refund", "wallet_topup", "penalty", "lock", "unlock", "settlement", "commission", "withdrawal"],
         required: true
     },
 

@@ -1,11 +1,17 @@
+import sellerModal from "../../models/roleWiseModal/seller.modal.js";
+import productModel from "../../models/product.model.js";
+import orderModal from "../../models/order.modal.js";
+import walletSystemModal from "../../models/walletSystem.modal.js";
+
 export const getSellerDashboard = async (req, res) => {
     try {
 
-        const seller = await sellerModal.findOne({ userId: req.user.id || req.user._id, kycStatus: "approved" }).select("_id kycStatus");
-        if (!seller) {
-            return res.status(404).json({ message: "Seller not found or KYC not approved" });
-        }
-        const sellerId = seller._id;
+        // const seller = await sellerModal.findOne({ userId: req.user.id || req.user._id, kycStatus: "approved" }).select("_id kycStatus");
+        // if (!seller) {
+        //     return res.status(404).json({ message: "Seller not found or KYC not approved" });
+        // }
+        // const sellerId = seller._id;
+        const sellerId = "69930f6dbc49845122265455";
 
         const [
             totalProducts,
@@ -19,18 +25,18 @@ export const getSellerDashboard = async (req, res) => {
             revenue,
             wallet
         ] = await Promise.all([
-            productModal.countDocuments({ sellerId }),
+            productModel.countDocuments({ sellerId }),
             orderModal.countDocuments({ sellerId }),
             orderModal.countDocuments({ sellerId, orderStatus: "delivered" }),
             orderModal.countDocuments({ sellerId, orderStatus: "cancelled" }),
             orderModal.countDocuments({ sellerId, orderStatus: "shipped" }),
             orderModal.countDocuments({ sellerId, orderStatus: "returned" }),
             orderModal.countDocuments({ sellerId, orderStatus: { $in: ["placed", "confirmed", "packed"] } }),
-            productModal.countDocuments({ sellerId, stock: { $lt: 5 } }),
+            productModel.countDocuments({ sellerId, stock: { $lt: 5 } }),
             orderModal.aggregate([{ $match: { sellerId, paymentStatus: "paid" } },
             { $group: { _id: null, total: { $sum: "$sellerAmount" } } }
             ]),
-            walletModal.findOne({ ownerId: req.user.id })
+            walletSystemModal.findOne({ ownerId: req.user.id, ownerType: "seller" })
         ]);
 
         res.json({
