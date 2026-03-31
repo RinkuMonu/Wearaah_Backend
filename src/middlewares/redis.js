@@ -6,7 +6,7 @@ if (process.env.REDIS_ENABLED == "true") {
     redis = new Redis({
         host: "127.0.0.1",
         port: 6379,
-        enableOfflineQueue: false, //(no api carsh... safe mode)
+        enableOfflineQueue: true, //(no api carsh... safe mode)
         maxRetriesPerRequest: null,
         retryStrategy(times) {
             if (times > 3) {

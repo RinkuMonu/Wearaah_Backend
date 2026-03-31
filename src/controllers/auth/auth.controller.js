@@ -273,14 +273,14 @@ export const login = async (req, res) => {
         }
 
         const sessionId = crypto.randomUUID();
-        const token = generateToken(user, sessionId);       
+        const token = generateToken(user, sessionId);
 
         if (redis) {
             await redis.setex(
                 `USER_AUTH_SESSION:${user._id}`,
                 60 * 60 * 24 * 7,
                 sessionId
-            ); 
+            );
         }
 
         user.lastLogin = new Date();
@@ -319,7 +319,6 @@ export const logout = async (req, res) => {
         if (redis) {
             await redis.del(`USER_AUTH_SESSION:${req.user.id}`);
         }
-
         return res.json({
             success: true,
             message: "Logged out successfully"
@@ -630,6 +629,39 @@ export const getProfile = async (req, res) => {
             success: false,
             message: "Failed to fetch profile"
         });
+    }
+};
+
+export const getMyWallet = async (req, res) => {
+    try {
+        const userId = req.user.id;
+
+        const wallet = await walletSystemModal
+            .findOne({ ownerId: userId })
+            .select("availableBalance lockedBalance superCoinBalance")
+            .lean();
+
+        // if (!wallet) {
+        //     return res.status(404).json({
+        //         success: false,
+        //         message: "Wallet not found"
+        //     });
+        // }
+        const available = wallet.availableBalance || 0;
+        const superCoinBalance = wallet.superCoinBalance || 0;
+
+        return res.status(200).json({
+            success: true,
+            availableBalance: available,
+            superCoinBalance
+        });
+
+    } catch (error) {
+        console.log("fetching wallet api", error)
+        // return res.status(500).json({
+        //     success: false,
+        //     message: error.message
+        // });
     }
 };
 

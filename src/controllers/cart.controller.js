@@ -42,24 +42,14 @@ export const addToCart = async (req, res) => {
 
     if (existingItem) {
       existingItem.quantity += quantity;
-      existingItem.finalPrice = existingItem.quantity * existingItem.sellingPrice;
     } else {
       cart.items.push({
         productId: product._id,
         variantId: variant._id,
         sellerId: variant.sellerId,
-        mrp: variant.pricing?.mrp,
-        sellingPrice: variant.pricing?.sellingPrice,
         quantity,
-        finalPrice: variant.pricing?.sellingPrice * quantity
       });
     }
-
-    // 🔹 Grand total
-    cart.grandTotal = cart.items.reduce(
-      (sum, item) => sum + item.finalPrice,
-      0
-    );
 
     await cart.save();
 
@@ -133,14 +123,7 @@ export const updateCartItem = async (req, res) => {
       );
     } else {
       item.quantity = quantity; // 🔥 actual update
-      item.finalPrice = item.sellingPrice * quantity;
     }
-
-    // 🔥 TOTAL RECALC
-    cart.grandTotal = cart.items.reduce(
-      (sum, item) => sum + item.finalPrice,
-      0
-    );
 
     await cart.save();
 
@@ -184,11 +167,6 @@ export const removeCartItem = async (req, res) => {
 
     cart.items = cart.items.filter(
       (item) => item.variantId.toString() !== id
-    );
-
-    cart.grandTotal = cart.items.reduce(
-      (sum, item) => sum + item.finalPrice,
-      0
     );
 
     await cart.save();
@@ -244,7 +222,7 @@ export const getCart = async (req, res) => {
         $group: {
           _id: "$_id",
           user: { $first: "$user" },
-          grandTotal: { $first: "$grandTotal" },
+          // grandTotal: { $first: "$grandTotal" },
           items: {
             $push: {
               _id: "$items._id",
@@ -257,7 +235,6 @@ export const getCart = async (req, res) => {
               product: {
                 _id: "$product._id",
                 title: "$product.name",
-                // images: "$product.productImage",
                 description: "$product.description",
               },
               variant: {
@@ -266,7 +243,8 @@ export const getCart = async (req, res) => {
                 variantImages: "$variant.variantImages",
                 sellingPrice: "$variant.pricing.sellingPrice",
                 mrp: "$variant.pricing.mrp",
-                taxPercent: "$variant.pricing.taxPercent"
+                taxPercent: "$variant.pricing.taxPercent",
+                stock: "$variant.stock"
               }
             }
           }

@@ -6,7 +6,6 @@ import productVariantModel from "../models/productVariant.model.js";
 import ProductVariant from "../models/productVariant.model.js";
 import sellerModal from "../models/roleWiseModal/seller.modal.js";
 import counterModel from "../models/counter.model.js";
-import { sendInvoiceEmail } from "../service/mailsend.js";
 import orderModal from "../models/order.modal.js";
 import orderQueue from "../queues/orderQueues/order.queue.js";
 import walletSystemModal from "../models/walletSystem.modal.js";
@@ -114,7 +113,7 @@ export const createOrder = async (req, res) => {
       }
 
       if (variant.stock < i.quantity) {
-        return res.status(400).json({ message: `Insufficient stock- ${variant.variantTitle} - ${variant.sku}` });
+        return res.status(400).json({ success: false, message: `Stock changed, Insufficient stock- ${variant.variantTitle} - ${variant.sku}` });
       }
 
       console.log(variant.productId.isdeliveryFree)
@@ -383,6 +382,7 @@ export const cancelOrder = async (req, res) => {
     const totalRefund = walletRefund + upiRefund;
     order.paymentStatus = "refunded";
     order.orderStatus = "cancelled";
+    order.settlementStatus = "settled";
     order.cancelReason = reason;
     order.refundAmount = totalRefund;
     order.refundedAt = new Date();
@@ -707,12 +707,84 @@ export const getAllOrders = async (req, res) => {
 
       {
         $facet: {
+
           data: [
             { $skip: skip },
             { $limit: pageSize }
           ],
+
           totalCount: [
             { $count: "count" }
+          ],
+
+          stats: [
+            {
+              $group: {
+                _id: null,
+
+                lockedAmount: {
+                  $sum: {
+                    $cond: [
+                      { $in: ["$orderStatus", ["placed", "accepted_by_seller", "packed", "out_for_delivery"]] },
+                      "$sellerAmount",
+                      0
+                    ]
+                  }
+                },
+
+                deliveredAmount: {
+                  $sum: {
+                    $cond: [
+                      { $eq: ["$orderStatus", "delivered"] },
+                      "$sellerAmount",
+                      0
+                    ]
+                  }
+                },
+
+                deliveredCount: {
+                  $sum: {
+                    $cond: [
+                      { $eq: ["$orderStatus", "delivered"] },
+                      1,
+                      0
+                    ]
+                  }
+                },
+
+                cancelledCount: {
+                  $sum: {
+                    $cond: [
+                      { $eq: ["$orderStatus", "cancelled"] },
+                      1,
+                      0
+                    ]
+                  }
+                },
+
+                returnedCount: {
+                  $sum: {
+                    $cond: [
+                      { $eq: ["$orderStatus", "returned"] },
+                      1,
+                      0
+                    ]
+                  }
+                },
+
+                // 🔥 TOTAL
+                totalAmount: {
+                  $sum: {
+                    $cond: [
+                      { $eq: ["$orderStatus", "delivered"] },
+                      "$sellerAmount",
+                      0
+                    ]
+                  }
+                },
+                totalCount: { $sum: 1 }
+              }
+            }
           ]
         }
       }
@@ -723,13 +795,26 @@ export const getAllOrders = async (req, res) => {
 
     const orders = result[0].data;
     const totalCount = result[0].totalCount[0]?.count || 0;
+    const stats = result[0].stats[0] || {};
 
-    res.json({
+    return res.status(200).json({
       success: true,
       orders,
       currentPage: pageNumber,
       totalPages: Math.ceil(totalCount / pageSize),
-      totalCount
+      totalCount,
+
+      stats: {
+        lockedAmount: stats.lockedAmount,
+        deliveredAmount: stats.deliveredAmount,
+
+        deliveredCount: stats.deliveredCount,
+        cancelledCount: stats.cancelledCount,
+        returnedCount: stats.returnedCount,
+
+        totalAmount: stats.totalAmount, // 
+        totalCount: stats.totalCount //order total
+      }
     });
 
   } catch (error) {

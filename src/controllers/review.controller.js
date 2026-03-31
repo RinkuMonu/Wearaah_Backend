@@ -1,150 +1,348 @@
+import mongoose from "mongoose";
+import orderModal from "../models/order.modal.js";
+import productVariantModel from "../models/productVariant.model.js";
 import Review from "../models/review.model.js";
-import Product from "../models/product.model.js";
+import productQueue from "../queues/productQueues/product.queue.js";
 
-/* =========================
-   CREATE REVIEW
-   POST /api/review
-========================= */
+
 export const createReview = async (req, res) => {
   try {
-    const { product, rating, comment } = req.body;
+    const userId = req.user.id;
+    const { variantId, rating=0, title, comment, ratingBreakdown } = req.body;
 
-    if (!product || !rating || !comment) {
+    // 🔥 1. Validation
+    if (!variantId || !rating || !title) {
       return res.status(400).json({
         success: false,
-        message: "Product, rating and comment are required"
+        message: "rating, and title are required"
       });
     }
+    if (ratingBreakdown) {
+      const { quality, fit, valueForMoney } = ratingBreakdown;
 
-    const review = await Review.create({
-      product,
-      user: req.user.id,
-      rating,
-      comment
-    });
+      if (quality && (quality < 1 || quality > 5)) {
+        return res.status(400).json({ message: "Invalid quality rating" });
+      }
 
-    // Update product rating
-    const reviews = await Review.find({ product, isActive: true });
-    const avgRating =
-      reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length;
+      if (fit && (fit < 1 || fit > 5)) {
+        return res.status(400).json({ message: "Invalid fit rating" });
+      }
 
-    await Product.findByIdAndUpdate(product, {
-      rating: avgRating.toFixed(1),
-      totalRatings: reviews.length
-    });
-
-    return res.status(201).json({
-      success: true,
-      review
-    });
-  } catch (error) {
-    if (error.code === 11000) {
-      return res.status(409).json({
+      if (valueForMoney && (valueForMoney < 1 || valueForMoney > 5)) {
+        return res.status(400).json({ message: "Invalid value rating" });
+      }
+    }
+    if (rating < 1 || rating > 5) {
+      return res.status(400).json({
         success: false,
-        message: "You have already reviewed this product"
+        message: "Rating must be between 1 to 5"
       });
     }
 
-    return res.status(500).json({
-      success: false,
-      message: "Failed to add review"
-    });
-  }
-};
+    const variant = await productVariantModel.findById(variantId).select("productId").lean();
 
-/* =========================
-   GET REVIEWS BY PRODUCT
-   GET /api/review/product/:productId
-========================= */
-export const getReviewsByProduct = async (req, res) => {
-  try {
-    const reviews = await Review.find({
-      product: req.params.productId,
-      isActive: true
-    })
-      .populate("user", "name")
-      .sort({ createdAt: -1 });
-
-    return res.status(200).json({
-      success: true,
-      reviews
-    });
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Failed to fetch reviews"
-    });
-  }
-};
-
-/* =========================
-   GET MY REVIEWS
-   GET /api/review/my
-========================= */
-export const getMyReviews = async (req, res) => {
-  try {
-    const reviews = await Review.find({
-      user: req.user.id,
-      isActive: true
-    }).populate("product", "name");
-
-    return res.status(200).json({
-      success: true,
-      reviews
-    });
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Failed to fetch your reviews"
-    });
-  }
-};
-
-/* =========================
-   UPDATE REVIEW
-   PUT /api/review/:id
-========================= */
-export const updateReview = async (req, res) => {
-  try {
-    const { rating, comment } = req.body;
-
-    const review = await Review.findOneAndUpdate(
-      { _id: req.params.id, user: req.user.id },
-      { rating, comment },
-      { new: true, runValidators: true }
-    );
-
-    if (!review) {
+    if (!variant) {
       return res.status(404).json({
         success: false,
-        message: "Review not found"
+        message: "Variant not found"
+      });
+    }
+    const productId = variant.productId;
+    const order = await orderModal.findOne({
+      customerId: userId,
+      orderStatus: "delivered",
+      "items.variantId": new mongoose.Types.ObjectId(variantId)
+    }).select("_id").sort({ createdAt: -1 }).lean();
+
+    if (!order) {
+      return res.status(400).json({
+        success: false,
+        message: "You can only review purchased & delivered items"
       });
     }
 
-    return res.status(200).json({
+    const existingReview = await Review.findOne({
+      userId,
+      variantId,
+      orderId: order._id
+    }).select("_id").lean();
+
+    if (existingReview) {
+      return res.status(400).json({
+        success: false,
+        message: "You already reviewed this item"
+      });
+    }
+    let rvImages = [];
+    if (req.files && req.files.length > 0) {
+      rvImages = req.files.map(file => `/uploads/${file.filename}`)
+    }
+
+
+    const review = await Review.create({
+      userId,
+      productId,
+      variantId,
+      orderId: order._id,
+      rating,
+      title,
+      comment,
+      rvImages,
+      ratingBreakdown: ratingBreakdown || {}
+    });
+
+    await productQueue.add("product_update_rating", {
+      productId,
+      rating
+    }, {
+      jobId: `productRate-${review._id}`
+    });
+
+    res.status(201).json({
       success: true,
+      message: "Review submitted successfully",
       review
     });
+
   } catch (error) {
-    return res.status(500).json({
+    console.error("Create Review Error:", error);
+
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: "Duplicate review"
+      });
+    }
+
+    res.status(500).json({
       success: false,
-      message: "Failed to update review"
+      message: error.message
     });
   }
 };
 
-/* =========================
-   DELETE REVIEW (SOFT)
-   DELETE /api/review/:id
-========================= */
-export const deleteReview = async (req, res) => {
+
+
+
+
+// get by variant id 
+
+export const getReviewsByVariant = async (req, res) => {
   try {
-    const review = await Review.findByIdAndUpdate(
-      req.params.id,
-      { isActive: false },
+    const { variantId, page = 1, limit = 10 } = req.query;
+
+    // 🔥 1. Validation
+    if (!variantId) {
+      return res.status(400).json({
+        success: false,
+        message: "variantId is required"
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(variantId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid variantId"
+      });
+    }
+
+    const skip = (Number(page) - 1) * Number(limit);
+
+    // 🔥 2. Get reviews + stats (single aggregation = fast 🚀)
+    const result = await Review.aggregate([
+      {
+        $match: {
+          variantId: new mongoose.Types.ObjectId(variantId)
+        }
+      },
+
+      {
+        $facet: {
+          // 📦 reviews data
+          reviews: [
+            { $sort: { createdAt: -1 } },
+            { $skip: skip },
+            { $limit: Number(limit) },
+
+            // 👤 user details
+            {
+              $lookup: {
+                from: "users",
+                localField: "userId",
+                foreignField: "_id",
+                as: "user"
+              }
+            },
+            {
+              $unwind: {
+                path: "$user",
+                preserveNullAndEmptyArrays: true
+              }
+            },
+
+            {
+              $project: {
+                rating: 1,
+                comment: 1,
+                title: 1,
+                images: 1,
+                likes: 1,
+                ratingBreakdown: 1,
+                createdAt: 1,
+                "user.name": 1,
+                "user.email": 1
+              }
+            }
+          ],
+
+          // 📊 stats
+          stats: [
+            {
+              $group: {
+                _id: null,
+                avgRating: { $avg: "$rating" },
+                totalReviews: { $sum: 1 },
+
+                avgQuality: { $avg: "$ratingBreakdown.quality" },
+                avgFit: { $avg: "$ratingBreakdown.fit" },
+                avgValue: { $avg: "$ratingBreakdown.valueForMoney" }
+              }
+            }
+          ]
+        }
+      }
+    ]);
+
+    const reviews = result[0].reviews;
+    const stats = result[0].stats[0] || {
+      avgRating: 0,
+      totalReviews: 0
+    };
+
+    res.json({
+      success: true,
+      reviews,
+      stats,
+      page: Number(page),
+      limit: Number(limit)
+    });
+
+  } catch (error) {
+    console.error("Get Reviews Error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+
+
+
+// like dislike toggle 
+export const toggleReaction = async (req, res) => {
+  try {
+    const userId = new mongoose.Types.ObjectId(req.user.id);
+    const { reviewId } = req.params;
+    const { action } = req.body;
+
+    if (!["like", "dislike"].includes(action)) {
+      return res.status(400).json({ success: false, message: "Invalid action" });
+    }
+
+    let update = {};
+
+    if (action === "like") {
+      update = [
+        {
+          $set: {
+            likedBy: {
+              $cond: [
+                { $in: [userId, "$likedBy"] },
+                { $setDifference: ["$likedBy", [userId]] },
+                { $concatArrays: ["$likedBy", [userId]] }
+              ]
+            },
+            dislikedBy: {
+              $setDifference: ["$dislikedBy", [userId]]
+            }
+          }
+        },
+        {
+          $set: {
+            likes: { $size: "$likedBy" },
+            dislikes: { $size: "$dislikedBy" }
+          }
+        }
+      ];
+    }
+
+    if (action === "dislike") {
+      update = [
+        {
+          $set: {
+            dislikedBy: {
+              $cond: [
+                { $in: [userId, "$dislikedBy"] },
+                { $setDifference: ["$dislikedBy", [userId]] },
+                { $concatArrays: ["$dislikedBy", [userId]] }
+              ]
+            },
+            likedBy: {
+              $setDifference: ["$likedBy", [userId]]
+            }
+          }
+        },
+        {
+          $set: {
+            likes: { $size: "$likedBy" },
+            dislikes: { $size: "$dislikedBy" }
+          }
+        }
+      ];
+    }
+
+    const updated = await Review.findByIdAndUpdate(
+      reviewId,
+      update,
       { new: true }
     );
 
+    res.json({
+      success: true,
+      likes: updated.likes,
+      dislikes: updated.dislikes,
+      isLiked: updated.likedBy.includes(userId),
+      isDisliked: updated.dislikedBy.includes(userId)
+    });
+
+  } catch (error) {
+    console.error("Reaction Error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+
+
+// update review
+
+export const updateReview = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { reviewId } = req.params;
+    const { rating, comment, title, ratingBreakdown } = req.body;
+    console.log("Update Review Request:", { userId, reviewId, rating, comment, title, ratingBreakdown });
+
+    if (!mongoose.Types.ObjectId.isValid(reviewId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid reviewId"
+      });
+    }
+
+    const review = await Review.findById(reviewId);
+
     if (!review) {
       return res.status(404).json({
         success: false,
@@ -152,14 +350,105 @@ export const deleteReview = async (req, res) => {
       });
     }
 
-    return res.status(200).json({
+    // 🔐 Ownership check
+    if (review.userId.toString() !== userId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: "Unauthorized"
+      });
+    }
+
+    // ⭐ validation
+    if (rating && (rating < 1 || rating > 5)) {
+      return res.status(400).json({
+        success: false,
+        message: "Rating must be between 1 to 5"
+      });
+    }
+    if (ratingBreakdown) {
+      const { quality, fit, valueForMoney } = ratingBreakdown;
+
+      if (quality && (quality < 1 || quality > 5)) {
+        return res.status(400).json({ success: false, message: "Invalid quality rating" });
+      }
+
+      if (fit && (fit < 1 || fit > 5)) {
+        return res.status(400).json({ success: false, message: "Invalid fit rating" });
+      }
+
+      if (valueForMoney && (valueForMoney < 1 || valueForMoney > 5)) {
+        return res.status(400).json({ success: false, message: "Invalid value rating" });
+      }
+    }
+
+    // 🔥 update fields (only if provided)
+    if (rating) review.rating = rating;
+    if (comment) review.comment = comment;
+    if (title) review.title = title;
+    if (ratingBreakdown) review.ratingBreakdown = ratingBreakdown;
+    await review.save();
+
+    res.json({
+      success: true,
+      message: "Review updated successfully",
+      review
+    });
+
+  } catch (error) {
+    console.error("Update Review Error:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+
+//delet review
+
+export const deleteReview = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { reviewId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(reviewId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid reviewId"
+      });
+    }
+
+    const review = await Review.findById(reviewId).select("userId isActive");
+
+    if (!review) {
+      return res.status(404).json({
+        success: false,
+        message: "Review not found"
+      });
+    }
+
+    // 🔐 Ownership check
+    if (review.userId.toString() !== userId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: "Unauthorized"
+      });
+    }
+
+    // 🔥 Soft delete
+    review.isActive = false;
+    await review.save();
+
+    res.json({
       success: true,
       message: "Review deleted successfully"
     });
+
   } catch (error) {
-    return res.status(500).json({
+    console.error("Delete Review Error:", error);
+    res.status(500).json({
       success: false,
-      message: "Failed to delete review"
+      message: error.message
     });
   }
 };

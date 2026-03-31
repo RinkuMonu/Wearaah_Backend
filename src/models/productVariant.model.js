@@ -67,6 +67,11 @@ const productVariantSchema = new mongoose.Schema({
     index: true
   },
 
+  isWishlisted: {
+    type: Boolean,
+    default: false
+  },
+
   qcActionBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
 
   qcNote: {

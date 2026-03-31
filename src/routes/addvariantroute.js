@@ -14,12 +14,14 @@ import {
     updateVariantStock
 } from "../controllers/addvariant.js";
 import { isSeller, isSuperAdmin } from "../middlewares/role.middleware.js";
+import { optionalAuth } from "../middlewares/optional.auth.md.js";
 
 const addvarintRoute = express.Router();
 
 /* USER */
 addvarintRoute.get(
     "/products/:productId/variants",
+    optionalAuth,
     getVariantsByProduct
 );
 

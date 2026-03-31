@@ -1,10 +1,9 @@
 import express from "express";
 import {
     createWithdrawalRequest,
-    getMyWithdrawals,
-    getAllWithdrawals,
     approveWithdrawal,
-    rejectWithdrawal
+    rejectWithdrawal,
+    getAllWithdrawal
 } from "../controllers/withdrawalReq.controller.js";
 import { protect } from "../middlewares/auth.middleware.js"
 import { isSuperAdmin } from "../middlewares/role.middleware.js"
@@ -13,12 +12,11 @@ import { isSuperAdmin } from "../middlewares/role.middleware.js"
 const withdrawalReq = express.Router();
 
 // user
-withdrawalReq.post("/create", protect, createWithdrawalRequest);
-withdrawalReq.get("/my", protect, getMyWithdrawals);
+withdrawalReq.post("/req", protect, createWithdrawalRequest);
 
 // admin
-withdrawalReq.get("/all", protect, isSuperAdmin, getAllWithdrawals);
-withdrawalReq.put("/approve/:id", protect, isSuperAdmin, approveWithdrawal);
-withdrawalReq.put("/reject/:id", protect, isSuperAdmin, rejectWithdrawal);
+withdrawalReq.get("/all", protect, getAllWithdrawal);
+withdrawalReq.put("/:id/approve", protect, isSuperAdmin, approveWithdrawal);
+withdrawalReq.put("/:id/reject", protect, isSuperAdmin, rejectWithdrawal);
 
 export default withdrawalReq;

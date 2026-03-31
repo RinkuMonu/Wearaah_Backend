@@ -2,7 +2,7 @@ import express from "express";
 
 import { protect } from "../middlewares/auth.middleware.js";
 import { upload } from "../config/multer.js";
-import { getAllUsers, getProfile, login, logout, registerViaOtp, updateProfile, updateUserKycStatus, updateUserStatus, verifyOtp } from "../controllers/auth/auth.controller.js";
+import { getAllUsers, getMyWallet, getProfile, login, logout, registerViaOtp, updateProfile, updateUserKycStatus, updateUserStatus, verifyOtp } from "../controllers/auth/auth.controller.js";
 import { isSuperAdmin } from "../middlewares/role.middleware.js";
 
 const authRoute = express.Router();
@@ -12,6 +12,7 @@ authRoute.post("/register/via/otp", registerViaOtp);
 authRoute.post("/login", login);
 authRoute.post("/logout", logout);
 authRoute.get("/me", protect, getProfile);
+authRoute.get("/get/wallet", protect, getMyWallet);
 authRoute.get("/alluser", protect, isSuperAdmin, getAllUsers);
 authRoute.put("/update", protect, upload.single("avatar"), updateProfile);
 authRoute.put("/update/user/status/:id", protect, updateUserStatus);

@@ -19,8 +19,8 @@ const router = express.Router();
 // User
 router.post("/", protect, createOrder);
 router.post("/cancelorder/:id", protect, cancelOrder);
-router.get("/my", protect, getOrders);
-router.get("/myAll", protect, isSeller, isSuperAdmin, getAllOrders);
+router.get("/my", protect, getOrders); // for web app customer
+router.get("/myAll", protect, isSuperAdmin, getAllOrders); // admin and seller
 // seller get unseen order//
 router.get("/unseen", protect, getUnseenOrders);
 // get order by id?

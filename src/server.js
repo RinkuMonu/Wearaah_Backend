@@ -30,16 +30,15 @@ import orderQueue from "./queues/orderQueues/order.queue.js";
 // import "./queues/orderQueues/order.worker.js"
 import walletTrancation from "./routes/ReportsRoute/report.route.js";
 import addresRouter from "./routes/address.router.js";
+import withdrawalReq from "./routes/withdrawal.routes.js";
 import multer from "multer";
 const app = express();
 import { initSocket } from "./config/socket.js";
+import { setupBullBoard } from "./QueueMonitoring/MonitoringQu.js";
 const server = http.createServer(app);
 dotenv.config();
 connectDB();
-
-import { initSocket } from "./config/socket.js";
-import multer from "multer";
-import withdrawalReq from "./routes/withdrawal.routes.js";
+setupBullBoard(app);
 // const waitingCount = await orderQueue.getWaitingCount();
 // const waiting = await orderQueue.getWaiting();
 // const counts = await orderQueue.getJobCounts();
@@ -133,12 +132,14 @@ app.use("/api/leads", leadrouter)
 
 app.use((err, req, res, next) => {
     if (err instanceof multer.MulterError) {
+        // console.error("Multer Error:", err);
         return res.status(400).json({
             success: false,
-            message: "File too large (max 5MB)"
+            message: "File upload error: " + err.message
         });
     }
     if (err) {
+        // console.error("Error:", err);
         return res.status(400).json({
             success: false,
             message: err.message

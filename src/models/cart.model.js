@@ -21,26 +21,11 @@ const cartItemSchema = new mongoose.Schema(
       required: true
     },
 
-    mrp: {
-      type: Number,
-      required: true
-    },
-
-    sellingPrice: {
-      type: Number,
-      required: true
-    },
-
     quantity: {
       type: Number,
       required: true,
       min: 1
     },
-
-    finalPrice: {
-      type: Number,
-      required: true
-    }, // price * qty
 
     isActive: {
       type: Boolean,
@@ -50,7 +35,7 @@ const cartItemSchema = new mongoose.Schema(
   },
   { _id: true }
 );
- 
+
 const cartSchema = new mongoose.Schema(
   {
     user: {
@@ -59,10 +44,6 @@ const cartSchema = new mongoose.Schema(
       required: true,
     },
     items: [cartItemSchema],
-    grandTotal: {
-      type: Number,
-      required: true
-    }
   },
   { timestamps: true }
 );
