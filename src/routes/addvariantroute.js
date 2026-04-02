@@ -64,7 +64,7 @@ addvarintRoute.put("/bulkstockupdate", protect, updateVariantStock);
 addvarintRoute.put(
     "/admin/variant/:id/status",
     protect,
-    isSuperAdmin,   // ✅ only admin
+    // isSuperAdmin,   // ✅ only admin
     updateVariantStatusByAdmin
 );
 addvarintRoute.delete(

@@ -158,25 +158,20 @@ export const getBrandsForWeb = async (req, res) => {
   }
 };
 export const getBrandsNameID = async (req, res) => {
-  try {
-    let query = {};
-    if (req.user.role === "seller") {
-      query.sellerId = req.user.id;
+    try {
+        let query = {}
+
+        const brands = await Brand.find(query).select("name _id").lean().sort({ createdAt: -1 })
+
+        return res.json({
+            success: true,
+            brands,
+        });
+
+    } catch (err) {
+        res.status(500).json({ message: err.message });
     }
-
-    const brands = await Brand.find(query)
-      .select("name _id")
-      .lean()
-      .sort({ createdAt: -1 });
-
-    return res.json({
-      success: true,
-      brands,
-    });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
   }
-};
 
 /* =========================
    GET SINGLE BRAND

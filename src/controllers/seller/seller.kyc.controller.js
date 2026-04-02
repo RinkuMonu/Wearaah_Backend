@@ -5,6 +5,7 @@ import { sendSellerEmail } from "../../service/mailsend.js";
 import crypto from "crypto";
 import { generateToken } from "../auth/auth.controller.js";
 import otpModal from "../../models/otp.modal.js";
+import mongoose from "mongoose";
 
 
 const buildNestedObject = (data = {}, parent) => {
@@ -562,7 +563,7 @@ const ALLOWED_TYPES = [
     "application/pdf"
 ];
 
-const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_SIZE = 10 * 1024 * 1024; // 10MB
 
 const validateFile = (file, fieldName) => {
     if (!file) {
@@ -653,6 +654,317 @@ export const saveDocuments = async (req, res) => {
 };
 
 
+
+export const updateSellerProfile = async (req, res) => {
+    try {
+        const sellerId = req.user?.id;
+
+        if (!mongoose.Types.ObjectId.isValid(sellerId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid seller ID",
+            });
+        }
+
+        const seller = await sellerModal.findOne({ userId: sellerId });
+        if (!seller) {
+            return res.status(404).json({
+                success: false,
+                message: "Seller not found",
+            });
+        }
+
+        // ❌ block suspended/blocked
+        if (["blocked", "suspended"].includes(seller.status)) {
+            return res.status(403).json({
+                success: false,
+                message: `Seller is ${seller.status}`,
+            });
+        }
+
+        const body = req.body;
+        const files = req.files || {};
+
+        // =========================
+        // 🔥 VALIDATIONS
+        // =========================
+
+        if (body.GSTIN) {
+            const gstRegex =
+                /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+            if (!gstRegex.test(body.GSTIN)) {
+                return res.status(400).json({ success: false, message: "Invalid GST" });
+            }
+        }
+
+        if (body.PAN) {
+            const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+            if (!panRegex.test(body.PAN)) {
+                return res.status(400).json({ success: false, message: "Invalid PAN" });
+            }
+        }
+
+        if (body.aadhaarNumber) {
+            if (!/^[0-9]{12}$/.test(body.aadhaarNumber)) {
+                return res
+                    .status(400)
+                    .json({ success: false, message: "Invalid Aadhaar" });
+            }
+        }
+
+        if (body.IFSC) {
+            if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(body.IFSC)) {
+                return res
+                    .status(400)
+                    .json({ success: false, message: "Invalid IFSC" });
+            }
+        }
+
+        // =========================
+        // 🔥 WORKING HOURS VALIDATION
+        // =========================
+        if (body.workingHours) {
+            // Check if workingHours is an array
+            if (!Array.isArray(body.workingHours)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Working hours must be an array"
+                });
+            }
+
+            const validDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+            const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+
+            // Validate each working hour entry
+            for (const hour of body.workingHours) {
+                // Check if day is valid
+                if (!validDays.includes(hour.day)) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `Invalid day: ${hour.day}. Must be one of ${validDays.join(', ')}`
+                    });
+                }
+
+                // Validate time format if provided
+                if (hour.open && !timeRegex.test(hour.open)) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `Invalid open time format for ${hour.day}. Use HH:MM format`
+                    });
+                }
+
+                if (hour.close && !timeRegex.test(hour.close)) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `Invalid close time format for ${hour.day}. Use HH:MM format`
+                    });
+                }
+
+                // Validate that open time is before close time if both provided
+                if (hour.open && hour.close && hour.open >= hour.close) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `Open time must be before close time for ${hour.day}`
+                    });
+                }
+
+                // Ensure isOpen field exists (default to true if not provided)
+                if (hour.isOpen === undefined) {
+                    hour.isOpen = true;
+                }
+            }
+
+            // Optional: Check if all days are present
+            const daysPresent = body.workingHours.map(h => h.day);
+            const missingDays = validDays.filter(day => !daysPresent.includes(day));
+
+            if (missingDays.length > 0 && missingDays.length !== validDays.length) {
+                // You can either:
+                // Option 1: Return error
+                return res.status(400).json({
+                    success: false,
+                    message: `Missing working hours for: ${missingDays.join(', ')}. Please provide all days.`
+                });
+
+                // Option 2: Keep existing hours for missing days (uncomment below if you prefer this)
+                // Keep existing working hours for missing days
+            }
+        }
+
+        // =========================
+        // 🔥 SAFE UPDATE OBJECT
+        // =========================
+        const updateData = {};
+
+        // basic fields
+        if (body.shopName) updateData.shopName = body.shopName;
+        if (body.businessType) updateData.businessType = body.businessType;
+        if (body.yearOfExperience) updateData.yearOfExperience = body.yearOfExperience;
+        if (body.GSTIN) updateData.GSTIN = body.GSTIN;
+        if (body.PAN) updateData.PAN = body.PAN;
+        if (body.aadhaarNumber) updateData.aadhaarNumber = body.aadhaarNumber;
+
+        // Shop status
+        if (body.shopStatus) {
+            const validStatuses = ['open', 'closed', 'temporarily_closed'];
+            if (!validStatuses.includes(body.shopStatus)) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Invalid shop status. Must be one of: ${validStatuses.join(', ')}`
+                });
+            }
+            updateData.shopStatus = body.shopStatus;
+        }
+
+        // Delivery radius
+        if (body.deliveryRadiusInKm) {
+            const radius = parseInt(body.deliveryRadiusInKm);
+            if (isNaN(radius) || radius < 0 || radius > 100) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Delivery radius must be between 0 and 100 km"
+                });
+            }
+            updateData.deliveryRadiusInKm = radius;
+        }
+
+        // =========================
+        // 🔥 WORKING HOURS UPDATE
+        // =========================
+        if (body.workingHours && Array.isArray(body.workingHours)) {
+            // If you want to replace all working hours
+            updateData.workingHours = body.workingHours;
+
+            // OR if you want to merge with existing working hours:
+            /*
+            const existingHours = seller.workingHours || [];
+            const updatedHours = [...existingHours];
+            
+            body.workingHours.forEach(newHour => {
+                const index = updatedHours.findIndex(h => h.day === newHour.day);
+                if (index !== -1) {
+                    updatedHours[index] = { ...updatedHours[index], ...newHour };
+                } else {
+                    updatedHours.push(newHour);
+                }
+            });
+            
+            updateData.workingHours = updatedHours;
+            */
+        }
+
+        // pickup address (nested safe merge)
+        if (body.street || body.city || body.state || body.pincode || body.country) {
+            updateData.pickupDelivery = {
+                ...(seller.pickupDelivery ? seller.pickupDelivery.toObject() : {}),
+                ...(body.street && { street: body.street }),
+                ...(body.city && { city: body.city }),
+                ...(body.state && { state: body.state }),
+                ...(body.pincode && { pincode: body.pincode }),
+                ...(body.country && { country: body.country }),
+            };
+        }
+
+        // bank details
+        if (
+            body.accountHolderName ||
+            body.accountNumber ||
+            body.IFSC ||
+            body.bankName ||
+            body.UPI
+        ) {
+            updateData.bankDetails = {
+                ...seller.bankDetails,
+                ...(body.accountHolderName && {
+                    accountHolderName: body.accountHolderName,
+                }),
+                ...(body.accountNumber && {
+                    accountNumber: body.accountNumber,
+                }),
+                ...(body.IFSC && { IFSC: body.IFSC }),
+                ...(body.bankName && { bankName: body.bankName }),
+                ...(body.UPI && { UPI: body.UPI }),
+            };
+        }
+
+        // social
+        if (body.whatsapp || body.instagram || body.facebook || body.twitter || body.linkedin || body.websiteLink || body.emailId) {
+            updateData.socialAccount = {
+                ...seller.socialAccount,
+                ...(body.whatsapp && { whatsapp: body.whatsapp }),
+                ...(body.instagram && { instagram: body.instagram }),
+                ...(body.facebook && { facebook: body.facebook }),
+                ...(body.twitter && { twitter: body.twitter }),
+                ...(body.linkedin && { linkedin: body.linkedin }),
+                ...(body.websiteLink && { websiteLink: body.websiteLink }),
+                ...(body.emailId && { emailId: body.emailId }),
+            };
+        }
+
+        // =========================
+        // 🔥 FILE UPLOAD HANDLING
+        // =========================
+        if (files.aadhaarFront) {
+            updateData["kycDocuments.aadhaarFront"] =
+                files.aadhaarFront[0].path;
+        }
+
+        if (files.aadhaarBack) {
+            updateData["kycDocuments.aadhaarBack"] =
+                files.aadhaarBack[0].path;
+        }
+
+        if (files.panCard) {
+            updateData["kycDocuments.panCard"] = files.panCard[0].path;
+        }
+
+        if (files.gstCertificate) {
+            updateData["kycDocuments.gstCertificate"] =
+                files.gstCertificate[0].path;
+        }
+
+        if (files.shopLicense) {
+            updateData["kycDocuments.shopLicense"] =
+                files.shopLicense[0].path;
+        }
+
+        if (files.cancelledCheque) {
+            updateData["kycDocuments.cancelledCheque"] =
+                files.cancelledCheque[0].path;
+        }
+
+        // Check if there's anything to update
+        if (Object.keys(updateData).length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "No valid fields to update"
+            });
+        }
+
+        // =========================
+        // 🚀 UPDATE (ONLY CHANGED)
+        // =========================
+        console.log("Update Data:", updateData);
+
+        const updatedSeller = await sellerModal.findByIdAndUpdate(
+            seller._id, // Use seller._id instead of sellerId
+            { $set: updateData },
+            { new: true, runValidators: true }
+        );
+
+        return res.json({
+            success: true,
+            message: "Seller updated successfully",
+            seller: updatedSeller,
+        });
+    } catch (error) {
+        console.error("UPDATE SELLER ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: error.message || "Internal server error",
+        });
+    }
+};
 
 export const sellerKycAction = async (req, res) => {
     try {

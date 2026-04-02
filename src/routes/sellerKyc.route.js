@@ -2,8 +2,8 @@ import express from "express";
 
 import { protect } from "../middlewares/auth.middleware.js";
 import { upload } from "../config/multer.js";
-import { isSuperAdmin } from "../middlewares/role.middleware.js";
-import { getAllSellers, getSellerById, saveAddress, saveBankDetails, saveBasicInfo, saveDocuments, sellerKycAction, submitSellerKyc, verification } from "../controllers/seller/seller.kyc.controller.js";
+import { isBothRole, isSuperAdmin } from "../middlewares/role.middleware.js";
+import { getAllSellers, getSellerById, saveAddress, saveBankDetails, saveBasicInfo, saveDocuments, sellerKycAction, submitSellerKyc, updateSellerProfile, verification } from "../controllers/seller/seller.kyc.controller.js";
 
 const sellerkycRoute = express.Router();
 
@@ -45,5 +45,20 @@ sellerkycRoute.post(
 );
 
 sellerkycRoute.post("/kycSellerAction/:sellerId", protect, isSuperAdmin, sellerKycAction);
+
+sellerkycRoute.put(
+    "/profile/update",
+    protect,
+    isBothRole,
+    upload.fields([
+        { name: "aadhaarFront", maxCount: 1 },
+        { name: "aadhaarBack", maxCount: 1 },
+        { name: "panCard", maxCount: 1 },
+        { name: "gstCertificate", maxCount: 1 },
+        { name: "shopLicense", maxCount: 1 },
+        { name: "cancelledCheque", maxCount: 1 },
+    ]),
+    updateSellerProfile
+);
 
 export default sellerkycRoute;

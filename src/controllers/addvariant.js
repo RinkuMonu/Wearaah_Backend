@@ -564,42 +564,53 @@ export const updateVariantStock = async (req, res) => {
    GET /api/products/:productId/variants
 ========================= */
 export const getVariantsByProduct = async (req, res) => {
-    try {
-        const userId = req.user?.id;
-        const variants = await ProductVariant.find({
-            productId: req.params.productId,
-            isActive: true,
-            status: "approved",
-        }).select("-pricing.costPrice").sort({ price: 1 }).lean();
-
-        let wishSet = new Set();
-
-        if (userId) {
-            const wishlist = await Wishlist.find({ userId })
-                .select("variantId")
-                .lean();
-
-            wishSet = new Set(
-                wishlist.map(w => w.variantId.toString())
-            );
-        }
-
-        const updatedVariants = variants.map(v => ({
-            ...v,
-            isWishlisted: wishSet.has(v._id.toString())
-        }));
-
-        return res.status(200).json({
-            success: true,
-            count: updatedVariants.length,
-            variants: updatedVariants
-        });
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: "Failed to fetch variants"
-        });
+  try {
+    const userId = req.user?.id;
+    const roletoken = req.user?.role;
+    const role = ["seller", "superadmin"];
+    let filter = {
+      productId: req.params.productId,
+      isActive: true,
+    };
+    if (!role.includes(roletoken)) {
+      filter.status = "approved";
     }
+    const selectFields = role.includes(roletoken)
+      ? ""
+      : "-pricing.costPrice";
+
+    const variants = await ProductVariant.find(
+      filter
+    ).select(selectFields).sort({ price: 1 }).lean();
+
+    let wishSet = new Set();
+
+    if (userId) {
+      const wishlist = await Wishlist.find({ userId })
+        .select("variantId")
+        .lean();
+
+      wishSet = new Set(
+        wishlist.map(w => w.variantId.toString())
+      );
+    }
+
+    const updatedVariants = variants.map(v => ({
+      ...v,
+      isWishlisted: wishSet.has(v._id.toString())
+    }));
+
+    return res.status(200).json({
+      success: true,
+      count: updatedVariants.length,
+      variants: updatedVariants
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch variants"
+    });
+  }
 };
 
 /* =========================
@@ -763,6 +774,7 @@ export const getAllVariants = async (req, res) => {
 export const getAllQcVariants = async (req, res) => {
   try {
     const { productId } = req.params;
+    console.log("Fetching QC variants for product:", productId);
 
     // 🔥 Fetch pending variants for this product
     const variants = await ProductVariant.find({
@@ -841,6 +853,7 @@ export const updateVariantStatusByAdmin = async (req, res) => {
       const pendingVariants = await ProductVariant.countDocuments({
         productId: variant.productId,
         status: "pending",
+        _id: { $ne: variant._id },
       });
 
       // ✅ if NO pending variants → update product
@@ -852,7 +865,6 @@ export const updateVariantStatusByAdmin = async (req, res) => {
         );
       }
     }
-
     await variant.save();
 
     return res.json({

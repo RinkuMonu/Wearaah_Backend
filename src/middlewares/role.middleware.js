@@ -25,3 +25,15 @@ export const isRider = (req, res, next) => {
   }
   next();
 };
+
+
+
+export const isBothRole = (req, res, next) => {
+  if (req.user.role !== "seller" && req.user.role !== "superadmin") {
+    return res.status(403).json({
+      success: false,
+      message: "access denied it is only for seller or super admin"
+    });
+  }
+  next();
+};
