@@ -1,9 +1,7 @@
 import { Worker } from "bullmq";
-import connectDB from "../../config/db.js";
 import redis from "../../middlewares/redis.js";
 import productModel from "../../models/product.model.js";
 
-await connectDB();
 
 const productWorker = new Worker(
     "productQueue",

@@ -16,7 +16,7 @@ const sellerSchema = new mongoose.Schema(
 
         businessType: {
             type: String,
-            enum: ["individual", "proprietorship", "partnership", "pvt_ltd"],
+            enum: ["individual", "proprietorship", "partnership", "pvt_ltd", "partnership"],
         },
         yearOfExperience: {
             type: String,
@@ -79,15 +79,52 @@ const sellerSchema = new mongoose.Schema(
             enum: ["open", "closed", "holiday"],
             default: "open"
         },
-
-        workingHours: [
-            {
-                day: String,
-                open: String,
-                close: String,
-                isClosed: Boolean
-            }
-        ],
+        workingHours: {
+            type: [
+                {
+                    day: {
+                        type: String,
+                        enum: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
+                        required: true
+                    },
+                    open: {
+                        type: String,
+                        required: true,
+                        match: /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, // HH:MM format
+                        default: "09:00"
+                    },
+                    close: {
+                        type: String,
+                        required: true,
+                        match: /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, // HH:MM format
+                        default: "18:00"
+                    },
+                    isOpen: {
+                        type: Boolean,
+                        default: true
+                    },
+                    breakStart: {
+                        type: String,
+                        match: /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
+                        default: null
+                    },
+                    breakEnd: {
+                        type: String,
+                        match: /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
+                        default: null
+                    }
+                }
+            ],
+            default: [
+                { day: "Monday", open: "09:00", close: "18:00", isOpen: true },
+                { day: "Tuesday", open: "09:00", close: "18:00", isOpen: true },
+                { day: "Wednesday", open: "09:00", close: "18:00", isOpen: true },
+                { day: "Thursday", open: "09:00", close: "18:00", isOpen: true },
+                { day: "Friday", open: "09:00", close: "18:00", isOpen: true },
+                { day: "Saturday", open: "10:00", close: "16:00", isOpen: true },
+                { day: "Sunday", open: "00:00", close: "00:00", isOpen: false }
+            ]
+        },
         kycStep: {
             type: Number
         },

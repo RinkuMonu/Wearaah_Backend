@@ -177,6 +177,7 @@ export const createProduct = async (req, res) => {
       status: validStatus,
       specifications: parsedSpecifications,
       productImage,
+      status: "approved",
     });
 
     return res.status(201).json({
@@ -212,6 +213,7 @@ export const getProducts = async (req, res) => {
       isBestSelling,
       isTopRated,
     } = req.query;
+    const { id, role } = req.user;
 
     // const isPrivileged =
     //   req.user?.role === "superAdmin" ||
@@ -224,7 +226,10 @@ export const getProducts = async (req, res) => {
 
     /* ---------------- PRODUCT MATCH ---------------- */
 
-    const productMatch = { isActive: true };
+    const productMatch = {};
+    if (role === "seller") {
+      productMatch.sellerId = new mongoose.Types.ObjectId(id);
+    }
 
     if (search) {
       productMatch.name = { $regex: search, $options: "i" };
@@ -247,9 +252,9 @@ export const getProducts = async (req, res) => {
 
     // 👤 CUSTOMER
     if (!isPrivileged) {
-      variantMatch.isActive = true;
-      variantMatch.stock = { $gt: 0 };
-      variantMatch.status = "approved";
+      // variantMatch.isActive = true;
+      // variantMatch.stock = { $gt: 0 };
+      // variantMatch.status = "approved";
     }
     if (req.user?.role === "seller") {
       variantMatch.sellerId = new mongoose.Types.ObjectId(req.user.id);
@@ -724,7 +729,7 @@ export const getQcProducts = async (req, res) => {
       )
       .populate("categoryId", "name")
       .populate("brandId", "name")
-      .populate("sellerId", "name email")
+      .populate("sellerId", "shopName")
       .sort(sortOption)
       .skip(skip)
       .limit(pageSize)

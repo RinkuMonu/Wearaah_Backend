@@ -113,9 +113,9 @@ export const getBrands = async (req, res) => {
 export const getBrandsNameID = async (req, res) => {
     try {
         let query = {}
-        if (req.user.role === "seller") {
-            query.sellerId = req.user.id;
-        }
+        // if (req.user.role === "seller") {
+        //     query.sellerId = req.user.id;
+        // }
 
         const brands = await Brand.find(query).select("name _id").lean().sort({ createdAt: -1 })
 

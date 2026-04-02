@@ -12,7 +12,7 @@ import {
   cancelOrder
 } from "../controllers/order.controller.js";
 import { protect } from "../middlewares/auth.middleware.js";
-import { isSeller, isSuperAdmin } from "../middlewares/role.middleware.js";
+import { isBothRole, isSeller, isSuperAdmin } from "../middlewares/role.middleware.js";
 
 const router = express.Router();
 
@@ -20,7 +20,7 @@ const router = express.Router();
 router.post("/", protect, createOrder);
 router.post("/cancelorder/:id", protect, cancelOrder);
 router.get("/my", protect, getOrders); // for web app customer
-router.get("/myAll", protect, isSuperAdmin, getAllOrders); // admin and seller
+router.get("/myAll", protect, isBothRole, getAllOrders); // admin and seller
 // seller get unseen order//
 router.get("/unseen", protect, getUnseenOrders);
 // get order by id?

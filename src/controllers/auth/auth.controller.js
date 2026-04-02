@@ -10,6 +10,7 @@ import sellerModal from "../../models/roleWiseModal/seller.modal.js";
 import riderModal from "../../models/roleWiseModal/rider.modal.js";
 import orderModal from "../../models/order.modal.js";
 import walletSystemModal from "../../models/walletSystem.modal.js";
+import mongoose from "mongoose";
 /* =========================
    JWT TOKEN GENERATOR
 ========================= */
@@ -340,7 +341,7 @@ export const updateProfile = async (req, res) => {
         const {
             name,
             email,
-            mobile,
+            // mobile,
             currentPassword,
             newPassword
         } = req.body;
@@ -390,27 +391,27 @@ export const updateProfile = async (req, res) => {
         /* =========================
            MOBILE
         ========================= */
-        if (mobile && mobile !== user.mobile) {
+        // if (mobile && mobile !== user.mobile) {
 
-            if (!/^[6-9]\d{9}$/.test(mobile)) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Invalid mobile number"
-                });
-            }
+        //     if (!/^[6-9]\d{9}$/.test(mobile)) {
+        //         return res.status(400).json({
+        //             success: false,
+        //             message: "Invalid mobile number"
+        //         });
+        //     }
 
-            const exists = await userModal.findOne({ mobile });
+        //     const exists = await userModal.findOne({ mobile });
 
-            if (exists) {
-                return res.status(409).json({
-                    success: false,
-                    message: "Mobile already in use"
-                });
-            }
+        //     if (exists) {
+        //         return res.status(409).json({
+        //             success: false,
+        //             message: "Mobile already in use"
+        //         });
+        //     }
 
-            updates.mobile = mobile;
-            updates.isVerified = false;
-        }
+        //     // updates.mobile = mobile;
+        //     updates.isVerified = false;
+        // }
 
         /* =========================
            PASSWORD CHANGE
@@ -542,16 +543,16 @@ export const getProfile = async (req, res) => {
         const redisKey = `USER_PROFILE:${userId}`;
 
 
-        if (redis) {
-            const cached = await redis.get(redisKey);
-            if (cached) {
-                return res.json({
-                    success: true,
-                    source: "redis",
-                    ...JSON.parse(cached)
-                });
-            }
-        }
+        // if (redis) {
+        //     const cached = await redis.get(redisKey);
+        //     if (cached) {
+        //         return res.json({
+        //             success: true,
+        //             source: "redis",
+        //             ...JSON.parse(cached)
+        //         });
+        //     }
+        // }
 
 
         const user = await userModal.findById(userId);
@@ -612,9 +613,9 @@ export const getProfile = async (req, res) => {
         };
 
 
-        if (redis) {
-            await redis.setex(redisKey, 3600, JSON.stringify(responseData));
-        }
+        // if (redis) {
+        //     await redis.setex(redisKey, 3600, JSON.stringify(responseData));
+        // }
 
         return res.json({
             role: user.role,
@@ -631,6 +632,68 @@ export const getProfile = async (req, res) => {
         });
     }
 };
+
+
+export const getSellerProfile = async (req, res) => {
+    try {
+        const sellerId = req.user?.id;
+        // console.log("Fetching seller profile for user ID:", req.user);
+
+        // ✅ 1. Auth validation
+        if (!sellerId || !mongoose.Types.ObjectId.isValid(sellerId)) {
+            return res.status(401).json({
+                success: false,
+                message: "Unauthorized access"
+            });
+        }
+
+        // ✅ 2. Query with projection + lean (FAST)
+        const seller = await sellerModal
+            .findOne({ userId: sellerId })
+            .lean();
+
+        // ✅ 3. Not found check
+        if (!seller) {
+            return res.status(404).json({
+                success: false,
+                message: "Seller not found"
+            });
+        }
+
+        // ✅ 4. Blocked / Suspended protection
+        if (["blocked", "suspended"].includes(seller.status)) {
+            return res.status(403).json({
+                success: false,
+                message: `Seller is ${seller.status}`
+            });
+        }
+
+
+
+        // ✅ 6. Final response
+        return res.status(200).json({
+            success: true,
+            message: "Seller profile fetched successfully",
+            seller
+        });
+
+    } catch (error) {
+        console.error("GET SELLER PROFILE ERROR:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: error.message || "Internal server error"
+        });
+    }
+};
+
+
+
+
+
+
+
+
 
 export const getMyWallet = async (req, res) => {
     try {

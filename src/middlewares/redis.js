@@ -17,7 +17,7 @@ if (process.env.REDIS_ENABLED == "true") {
         }
     });
     redis.on("connect", () => {
-        console.log("");
+        console.log("Redis connected successfully");
     });
 
     redis.on("error", (err) => {
