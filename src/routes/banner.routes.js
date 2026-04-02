@@ -16,9 +16,7 @@ const bannerRoute = express.Router();
 /* ADMIN */
 bannerRoute.post(
   "/",
-  protect,
-  isSuperAdmin,
-  upload.array("images", 5),
+  upload.single("image"),
   createBanner
 );
 

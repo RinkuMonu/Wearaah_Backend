@@ -7,6 +7,7 @@ import {
     deleteBrand,
     changeBrandStatus,
     getBrandsNameID,
+    getBrandsForWeb,
 } from "../controllers/brand.controller.js";
 
 import { protect } from "../middlewares/auth.middleware.js";
@@ -18,6 +19,7 @@ const brandRoute = express.Router();
 brandRoute.post("/", protect, isSuperAdmin, upload.single("logo"), createBrand);
 
 brandRoute.get("/", protect, getBrands);
+brandRoute.get("/web", getBrandsForWeb);
 brandRoute.get("/nameonly", protect, getBrandsNameID);
 
 brandRoute.get("/:id", getSingleBrand);
