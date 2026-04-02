@@ -21,24 +21,17 @@ const bannerSchema = new mongoose.Schema(
     },
 
     images: {
-      type: [String], // multiple banner images
+      type: String,
       required: true,
     },
 
     position: {
       type: String,
-      enum: [
-        "homepage-top",
-        "homepage-bottom",
-        "sidebar",
-        "footer",
-        "custom",
-      ],
+      enum: ["homepage-top", "homepage-bottom", "sidebar", "footer", "custom"],
       default: "homepage-top",
       index: true,
     },
 
-       /* ✅ NEW FIELD - CATEGORY (REQUIRED) */
     category: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Category",
@@ -46,12 +39,27 @@ const bannerSchema = new mongoose.Schema(
       index: true,
     },
 
-    /* ✅ NEW FIELD - SUBCATEGORY (OPTIONAL) */
     subcategory: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "SubCategory",
       default: null,
       index: true,
+    },
+
+    redirectType: {
+      type: String,
+      enum: ["category", "subcategory", "product", "brand", "external", "none"],
+      default: "none",
+    },
+    ctaText: {
+      type: String,
+    },
+    startDate: Date,
+    endDate: Date,
+    targetGender: {
+      type: String,
+      enum: ["men", "women", "unisex", "all"],
+      default: "all",
     },
 
     isActive: {
@@ -65,9 +73,8 @@ const bannerSchema = new mongoose.Schema(
       ref: "User",
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
-
 
 const Banner = mongoose.model("Banner", bannerSchema);
 export default Banner;

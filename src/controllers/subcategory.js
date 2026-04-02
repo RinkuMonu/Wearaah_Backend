@@ -164,7 +164,7 @@ export const subgetCategories = async (req, res) => {
             page: Number(page),
             limit: Number(limit),
             categories
-        });
+        }); 
 
     } catch (error) {
 

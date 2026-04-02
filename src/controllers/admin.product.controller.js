@@ -444,6 +444,7 @@ export const getProductsForWeb = async (req, res) => {
       category,
       subCategory,
       brand,
+      gender,
       color,
       size,
       minPrice,
@@ -460,6 +461,7 @@ export const getProductsForWeb = async (req, res) => {
       "category",
       "subCategory",
       "brand",
+      "gender",
       "color",
       "size",
       "minPrice",
@@ -509,6 +511,10 @@ export const getProductsForWeb = async (req, res) => {
     if (brand) {
       const brands = toObjectIds(brand);
       productMatch.brandId = { $in: brands };
+    }
+    if (gender) {
+      const genders = Array.isArray(gender) ? gender : gender.split(",");
+      productMatch.gender = { $in: genders };
     }
 
     if (color) {
