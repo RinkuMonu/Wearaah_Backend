@@ -5,9 +5,6 @@ import productVariantModel from "../../models/productVariant.model.js";
 import walletSystemModal from "../../models/walletSystem.modal.js";
 import WalletTransactionModal from "../../models/WalletTransaction.modal.js";
 import { sendInvoiceEmail } from "../../service/mailsend.js";
-import connectDB from "../../config/db.js";
-
-await connectDB();
 
 const orderWorker = new Worker(
     "orderQueue",
