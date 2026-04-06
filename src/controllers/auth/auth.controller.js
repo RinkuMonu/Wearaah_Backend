@@ -477,6 +477,7 @@ export const updateProfile = async (req, res) => {
 
 export const updateUserStatus = async (req, res) => {
     try {
+        console.log("Updating user status with data:", req.params, req.body);
         const userId = req.params.id;
         const { isBlocked, blockReason, isActive } = req.body;
 
@@ -848,26 +849,15 @@ export const updateUserKycStatus = async (req, res) => {
 
         switch (action) {
 
-            case "block":
-                user.isBlocked = true;
+            case "deactivate":
                 user.forceLogout = true;
                 user.blockReason = reason || "Blocked by admin";
                 user.isActive = false;
                 break;
 
-            case "unblock":
-                user.isBlocked = false;
-                user.blockReason = null;
-                user.isActive = true;
-                break;
-
             case "activate":
                 user.isActive = true;
-                break;
-
-            case "deactivate":
-                user.isActive = false;
-                user.forceLogout = true;
+                user.blockReason = "";
                 break;
 
             default:
@@ -881,7 +871,7 @@ export const updateUserKycStatus = async (req, res) => {
 
         /* ========= FORCE LOGOUT WHEN BLOCKED ========= */
 
-        if (action === "block" && redis) {
+        if (redis) {
             await redis.del(`USER_AUTH_SESSION:${user._id}`);
         }
 
