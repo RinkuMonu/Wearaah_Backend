@@ -475,11 +475,74 @@ export const updateProfile = async (req, res) => {
     }
 };
 
+// export const updateUserStatus = async (req, res) => {
+//     try {
+//         console.log("Updating user status with data:", req.params, req.body);
+//         const userId = req.params.id;
+//         const {  blockReason, isActive } = req.body;
+
+//         const user = await userModal.findById(userId);
+
+//         if (!user) {
+//             return res.status(404).json({
+//                 success: false,
+//                 message: "User not found"
+//             });
+//         }
+
+//         const updates = {};
+
+//         if (isActive !== undefined) {
+//             updates.isActive = isActive;
+//             updates.forceLogout = true;
+//         }
+
+//         if (isBlocked !== undefined) {
+
+//             if (isBlocked && !blockReason) {
+//                 return res.status(400).json({
+//                     success: false,
+//                     message: "Block reason is required when blocking a user"
+//                 });
+//             }
+
+//             updates.isActive = isActive;
+//             updates.blockReason =  blockReason;
+//             updates.forceLogout = true;
+//         }
+
+//         const updatedUser = await userModal.findByIdAndUpdate(
+//             userId,
+//             updates,
+//             { new: true, runValidators: true }
+//         );
+
+//         if (redis) {
+//             await redis.del(`USER_PROFILE_LIONESS:${userId}`);
+//         }
+
+//         return res.status(200).json({
+//             success: true,
+//             message: "User status updated successfully",
+//             user: updatedUser
+//         });
+
+//     } catch (error) {
+//         console.error("UPDATE USER STATUS ERROR:", error);
+//         return res.status(500).json({
+//             success: false,
+//             message: "User status update failed"
+//         });
+//     }
+// };
+
+
 export const updateUserStatus = async (req, res) => {
     try {
         console.log("Updating user status with data:", req.params, req.body);
+
         const userId = req.params.id;
-        const { isBlocked, blockReason, isActive } = req.body;
+        const { blockReason, isActive } = req.body;
 
         const user = await userModal.findById(userId);
 
@@ -495,20 +558,15 @@ export const updateUserStatus = async (req, res) => {
         if (isActive !== undefined) {
             updates.isActive = isActive;
             updates.forceLogout = true;
-        }
 
-        if (isBlocked !== undefined) {
-
-            if (isBlocked && !blockReason) {
+            if (isActive === false && !blockReason) {
                 return res.status(400).json({
                     success: false,
                     message: "Block reason is required when blocking a user"
                 });
             }
 
-            updates.isBlocked = isBlocked;
-            updates.blockReason = isBlocked ? blockReason : null;
-            updates.forceLogout = true;
+            updates.blockReason = isActive === false ? blockReason : "";
         }
 
         const updatedUser = await userModal.findByIdAndUpdate(
@@ -535,7 +593,6 @@ export const updateUserStatus = async (req, res) => {
         });
     }
 };
-
 
 
 export const getProfile = async (req, res) => {
@@ -849,15 +906,26 @@ export const updateUserKycStatus = async (req, res) => {
 
         switch (action) {
 
-            case "deactivate":
+            case "block":
+                user.isBlocked = true;
                 user.forceLogout = true;
                 user.blockReason = reason || "Blocked by admin";
                 user.isActive = false;
                 break;
 
+            case "unblock":
+                user.isBlocked = false;
+                user.blockReason = null;
+                user.isActive = true;
+                break;
+
             case "activate":
                 user.isActive = true;
-                user.blockReason = "";
+                break;
+
+            case "deactivate":
+                user.isActive = false;
+                user.forceLogout = true;
                 break;
 
             default:
@@ -871,7 +939,7 @@ export const updateUserKycStatus = async (req, res) => {
 
         /* ========= FORCE LOGOUT WHEN BLOCKED ========= */
 
-        if (redis) {
+        if (action === "block" && redis) {
             await redis.del(`USER_AUTH_SESSION:${user._id}`);
         }
 
