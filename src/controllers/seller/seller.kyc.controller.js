@@ -76,26 +76,14 @@ export const getAllSellers = async (req, res) => {
         const sellers = await sellerModal
             .find(filter)
             .select(
-                "shopName kycStatus kycStep isApproved createdAt kycDocuments userId"
+                "shopName kycStatus kycStep isApproved createdAt userId"
             )
-            .populate("userId", "name mobile") // only required
+            .populate("userId", "name mobile isActive") // only required
             .sort({ [sortBy]: order === "asc" ? 1 : -1 })
             .skip(skip)
             .limit(Number(limit))
             .lean();
-
-        /* 🔥 ADD DOCUMENT COUNT ONLY */
-        const formatted = sellers.map(s => ({
-            _id: s._id,
-            shopName: s.shopName,
-            ownerName: s.userId?.name,
-            mobile: s.userId?.mobile,
-            kycStatus: s.kycStatus,
-            kycStep: s.kycStep,
-            isApproved: s.isApproved,
-            createdAt: s.createdAt,
-            //   documentCount: Object.values(s.kycDocuments || {}).filter(Boolean).length
-        }));
+        console.log(sellers)
 
         const total = await sellerModal.countDocuments(filter);
 
@@ -104,7 +92,7 @@ export const getAllSellers = async (req, res) => {
             total,
             page: Number(page),
             pages: Math.ceil(total / limit),
-            sellers: formatted
+            sellers
         });
 
     } catch (err) {
