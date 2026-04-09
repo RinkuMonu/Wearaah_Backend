@@ -67,6 +67,11 @@ const productSchema = new mongoose.Schema(
       type: Array,
       default: []
     },
+    keywords: {
+      type: [String],
+      default: [],
+      index: true
+    },
     manufacturerDetails: {
       name: String,
       address: String,
@@ -88,7 +93,7 @@ const productSchema = new mongoose.Schema(
     },
 
     isdeliveryFree: {
-      type: String,
+      type: Boolean,
       default: true,
     },
 
@@ -133,7 +138,7 @@ const productSchema = new mongoose.Schema(
 
 productSchema.index({ categoryId: 1, subCategoryId: 1, brandId: 1 });
 productSchema.index({ sellerId: 1 });
-productSchema.index({ name: "text", description: "text" });
+productSchema.index({ name: "text", description: "text", keywords: "text" });
 productSchema.index({ rating: -1 });
 
 export default mongoose.model("Product", productSchema);

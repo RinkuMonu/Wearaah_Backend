@@ -11,7 +11,9 @@ import {
     getAllVariants,
     updateVariantStatusByAdmin,
     getAllQcVariants,
-    updateVariantStock
+    updateVariantStock,
+    globalSearch,
+    autoSuggest
 } from "../controllers/addvariant.js";
 import { isSeller, isSuperAdmin } from "../middlewares/role.middleware.js";
 import { optionalAuth } from "../middlewares/optional.auth.md.js";
@@ -26,6 +28,8 @@ addvarintRoute.get(
 );
 
 /* USER */
+addvarintRoute.get("/globalsearch", globalSearch);
+addvarintRoute.get("/autosuggest", autoSuggest);
 addvarintRoute.get("/:id", getVariantById);
 
 

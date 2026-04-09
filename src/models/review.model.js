@@ -19,7 +19,7 @@ const reviewSchema = new mongoose.Schema({
 
   variantId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: "Variant",
+    ref: "ProductVariant",
     required: true,
     index: true
   },
