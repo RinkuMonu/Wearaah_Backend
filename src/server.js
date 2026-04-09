@@ -32,6 +32,7 @@ const app = express();
 import { initSocket } from "./config/socket.js";
 import { setupBullBoard } from "./QueueMonitoring/MonitoringQu.js";
 import testRouter from "./routes/TestRoute/test.route.js";
+import { createVariantProductIndex } from "./config/productIndex.js";
 const server = http.createServer(app);
 dotenv.config();
 connectDB();
@@ -60,6 +61,7 @@ app.use(
     })
 );
 initSocket(server);
+createVariantProductIndex();
 
 // app.use(cors("*"));
 app.use(express.json());

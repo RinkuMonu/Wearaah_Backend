@@ -567,6 +567,13 @@ const validateFile = (file, fieldName) => {
     }
 };
 
+const formatPath = (file) => {
+    if (!file?.path) return null;
+
+    // ensure always starts with /
+    return file.path.startsWith("/") ? file.path : `/${file.path}`;
+};
+
 export const saveDocuments = async (req, res) => {
     try {
         const userId = req.user.id || req.body.userId;
@@ -592,12 +599,7 @@ export const saveDocuments = async (req, res) => {
         if (seller.businessType !== "individual") {
             validateFile(files?.gstCertificate?.[0], "GST Certificate");
         }
-        const formatPath = (file) => {
-            if (!file?.path) return null;
 
-            // ensure always starts with /
-            return file.path.startsWith("/") ? file.path : `/${file.path}`;
-        };
         // 🔥 SAVE PATHS
         seller.kycDocuments = {
             panCard: formatPath(files.panCard?.[0]),
@@ -894,31 +896,31 @@ export const updateSellerProfile = async (req, res) => {
         // =========================
         if (files.aadhaarFront) {
             updateData["kycDocuments.aadhaarFront"] =
-                files.aadhaarFront[0].path;
+                formatPath(files.aadhaarFront[0]);
         }
 
         if (files.aadhaarBack) {
             updateData["kycDocuments.aadhaarBack"] =
-                files.aadhaarBack[0].path;
+                formatPath(files.aadhaarBack[0]);
         }
 
         if (files.panCard) {
-            updateData["kycDocuments.panCard"] = files.panCard[0].path;
+            updateData["kycDocuments.panCard"] = formatPath(files.panCard[0]);
         }
 
         if (files.gstCertificate) {
             updateData["kycDocuments.gstCertificate"] =
-                files.gstCertificate[0].path;
+                formatPath(files.gstCertificate[0]);
         }
 
         if (files.shopLicense) {
             updateData["kycDocuments.shopLicense"] =
-                files.shopLicense[0].path;
+                formatPath(files.shopLicense[0]);
         }
 
         if (files.cancelledCheque) {
             updateData["kycDocuments.cancelledCheque"] =
-                files.cancelledCheque[0].path;
+                formatPath(files.cancelledCheque[0]);
         }
 
         // Check if there's anything to update

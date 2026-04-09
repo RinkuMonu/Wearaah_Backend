@@ -8,7 +8,7 @@ import productQueue from "../queues/productQueues/product.queue.js";
 export const createReview = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { variantId, rating=0, title, comment, ratingBreakdown } = req.body;
+    const { variantId, rating = 0, title, comment, ratingBreakdown } = req.body;
 
     // 🔥 1. Validation
     if (!variantId || !rating || !title) {
@@ -121,6 +121,31 @@ export const createReview = async (req, res) => {
   }
 };
 
+//get self reviews
+export const getMyReviews = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const reviews = await Review.find({ userId, isActive: true })
+      .populate("productId", "name")
+      .populate("variantId", "size color")
+      .populate("orderId", "orderNumber createdAt")
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      count: reviews.length,
+      reviews
+    });
+
+  } catch (error) {
+    console.error("Get My Reviews Error:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
 
 
 
@@ -187,6 +212,7 @@ export const getReviewsByVariant = async (req, res) => {
                 title: 1,
                 images: 1,
                 likes: 1,
+                dislikes: 1,
                 ratingBreakdown: 1,
                 createdAt: 1,
                 "user.name": 1,
