@@ -2,6 +2,7 @@ import express from "express";
 import {
   createReview,
   deleteReview,
+  getMyReviews,
   getReviewsByVariant,
   toggleReaction,
   updateReview,
@@ -21,6 +22,7 @@ reviewRoute.post(
   createReview
 );
 
+reviewRoute.get("/getreviews", protect, getMyReviews);
 reviewRoute.post("/like/:reviewId", protect, toggleReaction);
 reviewRoute.get("/", getReviewsByVariant);
 reviewRoute.put("/update/:reviewId", protect, updateReview);

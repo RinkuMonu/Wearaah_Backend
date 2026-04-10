@@ -76,26 +76,14 @@ export const getAllSellers = async (req, res) => {
         const sellers = await sellerModal
             .find(filter)
             .select(
-                "shopName kycStatus kycStep isApproved createdAt kycDocuments userId"
+                "shopName kycStatus kycStep isApproved createdAt userId"
             )
-            .populate("userId", "name mobile") // only required
+            .populate("userId", "name mobile isActive") // only required
             .sort({ [sortBy]: order === "asc" ? 1 : -1 })
             .skip(skip)
             .limit(Number(limit))
             .lean();
-
-        /* 🔥 ADD DOCUMENT COUNT ONLY */
-        const formatted = sellers.map(s => ({
-            _id: s._id,
-            shopName: s.shopName,
-            ownerName: s.userId?.name,
-            mobile: s.userId?.mobile,
-            kycStatus: s.kycStatus,
-            kycStep: s.kycStep,
-            isApproved: s.isApproved,
-            createdAt: s.createdAt,
-            //   documentCount: Object.values(s.kycDocuments || {}).filter(Boolean).length
-        }));
+        console.log(sellers)
 
         const total = await sellerModal.countDocuments(filter);
 
@@ -104,7 +92,7 @@ export const getAllSellers = async (req, res) => {
             total,
             page: Number(page),
             pages: Math.ceil(total / limit),
-            sellers: formatted
+            sellers
         });
 
     } catch (err) {
@@ -579,6 +567,13 @@ const validateFile = (file, fieldName) => {
     }
 };
 
+const formatPath = (file) => {
+    if (!file?.path) return null;
+
+    // ensure always starts with /
+    return file.path.startsWith("/") ? file.path : `/${file.path}`;
+};
+
 export const saveDocuments = async (req, res) => {
     try {
         const userId = req.user.id || req.body.userId;
@@ -604,12 +599,7 @@ export const saveDocuments = async (req, res) => {
         if (seller.businessType !== "individual") {
             validateFile(files?.gstCertificate?.[0], "GST Certificate");
         }
-        const formatPath = (file) => {
-            if (!file?.path) return null;
 
-            // ensure always starts with /
-            return file.path.startsWith("/") ? file.path : `/${file.path}`;
-        };
         // 🔥 SAVE PATHS
         seller.kycDocuments = {
             panCard: formatPath(files.panCard?.[0]),
@@ -906,31 +896,31 @@ export const updateSellerProfile = async (req, res) => {
         // =========================
         if (files.aadhaarFront) {
             updateData["kycDocuments.aadhaarFront"] =
-                files.aadhaarFront[0].path;
+                formatPath(files.aadhaarFront[0]);
         }
 
         if (files.aadhaarBack) {
             updateData["kycDocuments.aadhaarBack"] =
-                files.aadhaarBack[0].path;
+                formatPath(files.aadhaarBack[0]);
         }
 
         if (files.panCard) {
-            updateData["kycDocuments.panCard"] = files.panCard[0].path;
+            updateData["kycDocuments.panCard"] = formatPath(files.panCard[0]);
         }
 
         if (files.gstCertificate) {
             updateData["kycDocuments.gstCertificate"] =
-                files.gstCertificate[0].path;
+                formatPath(files.gstCertificate[0]);
         }
 
         if (files.shopLicense) {
             updateData["kycDocuments.shopLicense"] =
-                files.shopLicense[0].path;
+                formatPath(files.shopLicense[0]);
         }
 
         if (files.cancelledCheque) {
             updateData["kycDocuments.cancelledCheque"] =
-                files.cancelledCheque[0].path;
+                formatPath(files.cancelledCheque[0]);
         }
 
         // Check if there's anything to update

@@ -18,7 +18,7 @@ const buildNestedObject = (data = {}, parent) => {
 
 export const getAllRiders = async (req, res) => {
     try {
-        const {
+        let {
             page = 1,
             limit = 10,
             search,
@@ -32,59 +32,144 @@ export const getAllRiders = async (req, res) => {
             order = "desc"
         } = req.query;
 
+        page = parseInt(page);
+        limit = parseInt(limit);
+
         const skip = (page - 1) * limit;
 
-        let userFilter = {};
+        // 🔥 Build match filter
+        const matchFilter = {};
 
-        if (search) {
-            const users = await userModal.find({
-                $or: [
-                    { name: new RegExp(search, "i") },
-                    { email: new RegExp(search, "i") },
-                    { mobile: new RegExp(search, "i") }
-                ]
-            }).select("_id").lean();
+        if (city) matchFilter.city = city;
+        if (vehicleType) matchFilter.vehicleType = vehicleType;
+        if (kycStatus) matchFilter.kycStatus = kycStatus;
+        if (status) matchFilter.status = status;
+        if (availabilityStatus) matchFilter.availabilityStatus = availabilityStatus;
 
-            userFilter.userId = { $in: users.map(u => u._id) };
+        if (isApproved !== undefined && isApproved !== "") {
+            matchFilter.isApproved = isApproved === "true";
         }
 
-        /* 🔎 RIDER FILTER */
-        const filter = {
-            ...userFilter
+        // 🔥 Aggregation pipeline
+        const result = await riderModal.aggregate([
+            // 🔹 Join user data
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "userId",
+                    foreignField: "_id",
+                    as: "user"
+                }
+            },
+            { $unwind: "$user" },
+
+            // 🔹 Apply filters
+            {
+                $match: matchFilter
+            },
+
+            // 🔹 Search (rider + user fields)
+            ...(search
+                ? [{
+                    $match: {
+                        $or: [
+                            { riderCode: { $regex: search, $options: "i" } },
+                            { vehicleNumber: { $regex: search, $options: "i" } },
+                            { drivingLicenseNumber: { $regex: search, $options: "i" } },
+                            { "user.name": { $regex: search, $options: "i" } },
+                            { "user.email": { $regex: search, $options: "i" } },
+                            { "user.mobile": { $regex: search, $options: "i" } },
+                            { "user.platformId": { $regex: search, $options: "i" } }
+                        ]
+                    }
+                }]
+                : []),
+
+            // 🔹 Facet for pagination + stats
+            {
+                $facet: {
+                    riders: [
+                        {
+                            $project: {
+                                riderCode: 1,
+                                city: 1,
+                                vehicleType: 1,
+                                vehicleNumber: 1,
+                                drivingLicenseNumber: 1,
+                                kycStatus: 1,
+                                status: 1,
+                                createdAt: 1,
+                                "user._id": 1,
+                                "user.name": 1,
+                                "user.email": 1,
+                                "user.mobile": 1,
+                                "user.platformId": 1,
+                                "user.avatar": 1
+                            }
+                        },
+                        { $sort: { [sortBy]: order === "asc" ? 1 : -1 } },
+                        { $skip: skip },
+                        { $limit: limit }
+                    ],
+
+                    totalCount: [
+                        { $count: "count" }
+                    ],
+
+                    stats: [
+                        {
+                            $group: {
+                                _id: null,
+                                totalKycVerified: {
+                                    $sum: {
+                                        $cond: [{ $eq: ["$kycStatus", "verified"] }, 1, 0]
+                                    }
+                                },
+                                totalBlocked: {
+                                    $sum: {
+                                        $cond: [{ $eq: ["$status", "blocked"] }, 1, 0]
+                                    }
+                                },
+                                totalActive: {
+                                    $sum: {
+                                        $cond: [{ $eq: ["$status", "active"] }, 1, 0]
+                                    }
+                                },
+                                totalSuspended: {
+                                    $sum: {
+                                        $cond: [{ $eq: ["$status", "suspended"] }, 1, 0]
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        ]);
+
+        const riders = result[0].riders;
+        const total = result[0].totalCount[0]?.count || 0;
+        const stats = result[0].stats[0] || {
+            totalKycVerified: 0,
+            totalBlocked: 0,
+            totalActive: 0,
+            totalSuspended: 0
         };
 
-        if (city) filter.city = city;
-        if (vehicleType) filter.vehicleType = vehicleType;
-        if (kycStatus) filter.kycStatus = kycStatus;
-        if (status) filter.status = status;
-        if (availabilityStatus) filter.availabilityStatus = availabilityStatus;
-        if (isApproved !== undefined) filter.isApproved = isApproved;
-
-        /* 🔎 GLOBAL SEARCH IN RIDER FIELDS */
-        if (search) {
-            filter.$or = [
-                { riderCode: new RegExp(search, "i") }
-            ];
-        }
-
-        const riders = await riderModal
-            .find(filter)
-            .populate("userId", "name email mobile")
-            .sort({ [sortBy]: order === "asc" ? 1 : -1 })
-            .skip(skip)
-            .limit(Number(limit)).lean();
-
-        const total = await riderModal.countDocuments(filter).lean();
+        const totalPages = Math.ceil(total / limit);
 
         res.status(200).json({
             success: true,
             total,
-            page: Number(page),
-            pages: Math.ceil(total / limit),
+            totalPages,
+            page,
+            limit,
+            stats,
             riders
         });
 
     } catch (err) {
+        console.error("Get All Riders Error:", err);
         res.status(500).json({
             success: false,
             message: err.message
@@ -98,8 +183,7 @@ export const getRiderById = async (req, res) => {
         const { riderId } = req.params;
 
         const rider = await riderModal
-            .findById(riderId)
-            .populate("userId", "name email mobile isActive isBlocked").lean();
+            .findById(riderId).select("-__v").lean()
 
         if (!rider) {
             return res.status(404).json({
@@ -120,6 +204,82 @@ export const getRiderById = async (req, res) => {
         });
     }
 };
+
+
+export const updateRiderStatus = async (req, res) => {
+    try {
+        const { riderId } = req.params;
+        const { status } = req.body;
+
+        // ✅ Allowed statuses
+        const allowedStatuses = ["active", "suspended", "blocked", "inprogress"];
+
+        if (!allowedStatuses.includes(status)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid status value"
+            });
+        }
+
+        // 🔥 Atomic update (single DB hit)
+        const rider = await riderModal.findOneAndUpdate(
+            { _id: riderId },
+            {
+                $set: {
+                    status,
+                    updatedAt: new Date()
+                }
+            },
+            {
+                new: true,
+                select: "userId riderCode status updatedAt",
+            }
+        ).lean();
+        console.log("Updated Rider:", rider);
+
+        if (!rider) {
+            return res.status(404).json({
+                success: false,
+                message: "Rider not found"
+            });
+        }
+        const user = await userModal.findById(rider.userId).select("isActive forceLogout").lean();
+        if (user) {
+            if (["blocked", "suspended"].includes(status)) {
+                await userModal.findByIdAndUpdate(rider.userId, { isActive: false, forceLogout: true });
+            } else if (status === "active") {
+                await userModal.findByIdAndUpdate(rider.userId, { isActive: true, forceLogout: false });
+            }
+        }
+        console.log("Updated User Status for Rider:", user);
+
+
+        return res.status(200).json({
+            success: true,
+            message: `Rider status updated successfully to ${status}`,
+            rider
+        });
+
+    } catch (err) {
+        console.error("Update Rider Status Error:", err);
+        return res.status(500).json({
+            success: false,
+            message: err.message
+        });
+    }
+};
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 export const submitRiderKyc = async (req, res) => {
