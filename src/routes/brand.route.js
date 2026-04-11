@@ -1,13 +1,13 @@
 import express from "express";
 import {
-    createBrand,
-    getBrands,
-    getSingleBrand,
-    updateBrand,
-    deleteBrand,
-    changeBrandStatus,
-    getBrandsNameID,
-    getBrandsForWeb,
+  createBrand,
+  getBrands,
+  getSingleBrand,
+  updateBrand,
+  deleteBrand,
+  changeBrandStatus,
+  getBrandsNameID,
+  getBrandsForWeb,
 } from "../controllers/brand.controller.js";
 
 import { protect } from "../middlewares/auth.middleware.js";
@@ -16,7 +16,16 @@ import { upload } from "../config/multer.js";
 
 const brandRoute = express.Router();
 
-brandRoute.post("/", protect, isSuperAdmin, upload.single("logo"), createBrand);
+brandRoute.post(
+  "/",
+    protect,
+    isSuperAdmin,
+  upload.fields([
+    { name: "logo", maxCount: 1 },
+    { name: "banner", maxCount: 1 },
+  ]),
+  createBrand,
+);
 
 brandRoute.get("/", protect, getBrands);
 brandRoute.get("/web", getBrandsForWeb);
@@ -24,15 +33,16 @@ brandRoute.get("/nameonly", protect, getBrandsNameID);
 
 brandRoute.get("/:id", getSingleBrand);
 
-brandRoute.put("/:id", protect, isSuperAdmin, upload.single("logo"), updateBrand);
+brandRoute.put(
+  "/:id",
+//   protect,
+//   isSuperAdmin,
+  upload.fields([{ name: "logo" }, { name: "banner" }]),
+  updateBrand,
+);
 
 brandRoute.delete("/:id", protect, isSuperAdmin, deleteBrand);
 
-brandRoute.patch(
-    "/status/:id",
-    protect,
-    isSuperAdmin,
-    changeBrandStatus
-);
+brandRoute.patch("/status/:id", protect, isSuperAdmin, changeBrandStatus);
 
 export default brandRoute;
