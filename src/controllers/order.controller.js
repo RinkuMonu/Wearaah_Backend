@@ -582,7 +582,7 @@ export const getAllOrders = async (req, res) => {
       productId,
       orderStatus,
       settlementStatus,
-      paymentMethod
+      paymentMethod,
     } = req.query;
 
     const role = req.user.role;
@@ -602,11 +602,11 @@ export const getAllOrders = async (req, res) => {
     }
 
     if (role === "seller") {
-      match.sellerId = req.user.sellerId;
+      match.sellerId = req.user.id;
     }
 
     if (role === "rider") {
-      match.riderId = req.user.riderId;
+      match.riderId = req.user.id;
     }
 
     /* -----------------------------
@@ -622,7 +622,7 @@ export const getAllOrders = async (req, res) => {
     }
 
     if (sellerId) {
-      match.sellerId = sellerId;
+      match.sellerId = new mongoose.Types.ObjectId(sellerId);
     }
 
     if (riderId) {
@@ -640,7 +640,7 @@ export const getAllOrders = async (req, res) => {
     if (settlementStatus) {
       match.settlementStatus = settlementStatus;
     }
-
+    console.log(match)
     if (productId) {
       match["items.productId"] = productId;
     }
@@ -709,6 +709,11 @@ export const getAllOrders = async (req, res) => {
         $facet: {
 
           data: [
+            // {
+            //   $project: {
+            //     platformCommission: 0
+            //   }
+            // },
             { $skip: skip },
             { $limit: pageSize }
           ],

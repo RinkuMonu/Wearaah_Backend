@@ -15,7 +15,7 @@ import {
     globalSearch,
     autoSuggest
 } from "../controllers/addvariant.js";
-import { isSeller, isSuperAdmin } from "../middlewares/role.middleware.js";
+import { isBothRole, isSeller, isSuperAdmin } from "../middlewares/role.middleware.js";
 import { optionalAuth } from "../middlewares/optional.auth.md.js";
 
 const addvarintRoute = express.Router();
@@ -43,6 +43,7 @@ addvarintRoute.get(
 );
 addvarintRoute.get(
     "/admin/qc-variants/:productId",
+    isBothRole,
     getAllQcVariants
 );
 
