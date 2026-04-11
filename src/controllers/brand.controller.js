@@ -16,7 +16,6 @@ export const createBrand = async (req, res) => {
       countryOfOrigin,
       websiteUrl,
     } = req.body;
-    console.log(req.body);
 
     if (
       !name ||
@@ -34,7 +33,7 @@ export const createBrand = async (req, res) => {
       });
     }
 
-    if (!req.file) {
+    if (!req.files) {
       return res.status(400).json({ message: "Brand logo is required" });
     }
 
@@ -48,7 +47,8 @@ export const createBrand = async (req, res) => {
 
     const brand = await Brand.create({
       ...req.body,
-      logo: req.file.path,
+      logo: req.files.logo[0].path,
+      banner: req.files.banner[0].path,
       sellerId: req.user.id,
       createdBy: req.user.id,
     });
@@ -119,7 +119,7 @@ export const getBrandsForWeb = async (req, res) => {
   try {
     const { page = 1, limit = 10, search, status } = req.query;
 
-    const query = { isActive: true ,status:"approved"};
+    const query = { isActive: true, status: "approved" };
 
     // ✅ STATUS FILTER
     if (status) {
@@ -139,7 +139,7 @@ export const getBrandsForWeb = async (req, res) => {
       ];
     }
 
-    const   brands = await Brand.find(query)
+    const brands = await Brand.find(query)
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(Number(limit));
@@ -158,20 +158,22 @@ export const getBrandsForWeb = async (req, res) => {
   }
 };
 export const getBrandsNameID = async (req, res) => {
-    try {
-        let query = {}
+  try {
+    let query = {};
 
-        const brands = await Brand.find(query).select("name _id").lean().sort({ createdAt: -1 })
+    const brands = await Brand.find(query)
+      .select("name _id")
+      .lean()
+      .sort({ createdAt: -1 });
 
-        return res.json({
-            success: true,
-            brands,
-        });
-
-    } catch (err) {
-        res.status(500).json({ message: err.message });
-    }
+    return res.json({
+      success: true,
+      brands,
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
+};
 
 /* =========================
    GET SINGLE BRAND
@@ -208,8 +210,11 @@ export const updateBrand = async (req, res) => {
       return res.status(403).json({ message: "Unauthorized" });
     }
 
-    if (req.file) {
-      req.body.logo = req.file.path;
+    if (req.files?.logo) {
+      req.body.logo = req.files.logo[0].path;
+    }
+    if (req.files.banner) {
+      req.body.banner = req.files.banner[0].path;
     }
 
     const updated = await Brand.findByIdAndUpdate(req.params.id, req.body, {
