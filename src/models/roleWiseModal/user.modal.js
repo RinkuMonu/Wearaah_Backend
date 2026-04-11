@@ -56,19 +56,15 @@ const userSchema = new mongoose.Schema(
             default: true
         },
 
-        isBlocked: {
-            type: Boolean,
-            default: false
-        },
-
         forceLogout: {
             type: Boolean,
             default: false
         },
+        
         blockReason: {
             type: String,
             required: function () {
-                return this.isBlocked === true
+                return this.isActive === false
             }
         },
         sessionId: String,

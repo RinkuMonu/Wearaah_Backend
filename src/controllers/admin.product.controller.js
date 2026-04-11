@@ -45,6 +45,7 @@ export const createProduct = async (req, res) => {
       status,
       description,
       specifications = {},
+      keywords = [],
     } = req.body;
 
     /* =====================
@@ -94,7 +95,7 @@ export const createProduct = async (req, res) => {
         message: "Invalid sub category for selected category",
       });
     }
-    console.log(subCategoryDoc);
+    // console.log(subCategoryDoc);
     if (!brandExist) {
       return res.status(400).json({
         success: false,
@@ -102,6 +103,20 @@ export const createProduct = async (req, res) => {
       });
     }
 
+    const normalizeArray = (data) => {
+      if (!data) return [];
+
+      if (typeof data === "string") {
+        return data.split(",").map((item) => item.trim().toLowerCase());
+      }
+
+      if (Array.isArray(data)) {
+        return data.map((item) => item.trim().toLowerCase());
+      }
+
+      return [];
+    };
+    const parsedKeywords = normalizeArray(keywords);
     let parsedSpecifications = specifications;
 
     if (typeof specifications === "string") {
@@ -178,7 +193,9 @@ export const createProduct = async (req, res) => {
       specifications: parsedSpecifications,
       productImage,
       status: "approved",
+      keywords: parsedKeywords,
     });
+
 
     return res.status(201).json({
       success: true,
