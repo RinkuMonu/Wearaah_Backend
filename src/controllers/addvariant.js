@@ -399,18 +399,50 @@ export const updateVariant = async (req, res) => {
       });
     }
 
-    if (variant.sellerId.toString() !== req.user.id.toString()) {
-      return res.status(403).json({
-        success: false,
-        message: "You are not allowed to update this variant",
-      });
-    }
+    console.log("variant.sellerId:", variant.sellerId.toString());
+console.log("req.user.id:", req.user.id.toString());
 
-    let variantImages = variant.variantImages;
+    // if (variant.sellerId.toString() !== req.user.id.toString()) {
+    //   return res.status(403).json({
+    //     success: false,
+    //     message: "You are not allowed to update this variant",
+    //   });
+    // }
 
-    if (req.files?.length) {
-      variantImages = req.files.map((file) => `/uploads/${file.filename}`);
-    }
+    
+    // let variantImages = variant.variantImages;
+
+    // if (req.files?.length) {
+    //   variantImages = req.files.map((file) => `/uploads/${file.filename}`);
+    // }
+
+    let variantImages = [];
+
+// ✅ existing images (jo user ne delete nahi ki)
+if (req.body.existingImages) {
+  try {
+    variantImages = JSON.parse(req.body.existingImages);
+  } catch (err) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid existingImages format",
+    });
+  }
+}
+
+// ✅ new images add karo
+if (req.files && req.files.length > 0) {
+  const newImages = req.files.map(
+    (file) => `/uploads/${file.filename}`
+  );
+
+  variantImages = [...variantImages, ...newImages];
+}
+
+// ✅ fallback (agar kuch bhi nahi aaya)
+if (variantImages.length === 0) {
+  variantImages = variant.variantImages;
+}
 
     /* -------- PARSE PRICING -------- */
 
@@ -500,6 +532,12 @@ export const updateVariant = async (req, res) => {
         { new: true },
       );
     }
+
+    const productForIndexing = await Product.findById(variant.productId).select("name description brandId categoryId subCategoryId rating keywords")
+      .populate("brandId", "name")
+      .populate("categoryId", "name")
+      .populate("subCategoryId", "name");
+    await indexVariant(updatedVariant, productForIndexing);
 
     return res.json({
       success: true,

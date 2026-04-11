@@ -472,6 +472,7 @@ export const getProductsForWeb = async (req, res) => {
       isTrending,
       isBestSelling,
       isTopRated,
+      isNewArrival,
     } = req.query;
     const skipKeys = [
       "search",
@@ -489,6 +490,7 @@ export const getProductsForWeb = async (req, res) => {
       "isTrending",
       "isBestSelling",
       "isTopRated",
+      "isNewArrival",
     ];
 
     const pageNumber = Number(page);
@@ -551,6 +553,7 @@ export const getProductsForWeb = async (req, res) => {
     if (isTrending === "true") productMatch.isTrending = true;
     if (isBestSelling === "true") productMatch.isBestSelling = true;
     if (isTopRated === "true") productMatch.isTopRated = true;
+    if (isNewArrival) productMatch.isNewArrival = true;
 
     const variantMatch = {
       isActive: true,
@@ -748,7 +751,7 @@ export const getQcProducts = async (req, res) => {
 
     const products = await Product.find(match)
       .select(
-        "name productImage categoryId brandId sellerId isNewVariantAdd createdAt specifications",
+        "name productImage categoryId brandId sellerId isNewVariantAdd createdAt specifications keywords",
       )
       .populate("categoryId", "name")
       .populate("brandId", "name")
@@ -850,6 +853,7 @@ export const updateProduct = async (req, res) => {
       "description",
       "specifications",
       "returnPolicyDays",
+      "keywords",
     ];
 
     editableFields.forEach((field) => {
@@ -857,6 +861,15 @@ export const updateProduct = async (req, res) => {
         updates[field] = req.body[field];
       }
     });
+
+    if (req.body.keywords !== undefined) {
+  if (typeof req.body.keywords === "string") {
+    updates.keywords = req.body.keywords
+      .split(",")
+      .map((k) => k.trim())
+      .filter((k) => k.length > 0);
+  }
+}
 
     /* ------------ IMAGE ------------ */
 
