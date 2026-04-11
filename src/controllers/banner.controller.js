@@ -104,10 +104,10 @@ export const getBanners = async (req, res) => {
       .populate("category", "name slug")
       .populate("subcategory", "name slug")
       .sort({ createdAt: -1 });
-
+ 
     return res.status(200).json({
       success: true,
-      banners,
+      banners,  
     });
   } catch (error) {
     return res.status(500).json({
