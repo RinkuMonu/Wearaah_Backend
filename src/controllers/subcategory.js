@@ -149,7 +149,7 @@ export const subgetCategories = async (req, res) => {
 
         const categories = await SubCategory.find(filter).populate({
             path: "categoryId",
-            select: "name"
+            select: "name slug"
         })
             .sort({ [sort]: -1 })
             .skip(skip)
