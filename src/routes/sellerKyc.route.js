@@ -47,7 +47,7 @@ sellerkycRoute.post(
 sellerkycRoute.post("/kycSellerAction/:sellerId", protect, isSuperAdmin, sellerKycAction);
 
 sellerkycRoute.put(
-    "/profile/update",
+    "/profile/update/:id",
     protect,
     isBothRole,
     upload.fields([
