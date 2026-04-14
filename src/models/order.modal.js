@@ -179,8 +179,8 @@ const orderSchema = new mongoose.Schema(
 
     orderStatus: {
       type: String,
-      enum: ["placed", "accepted_by_seller", "packed", "ready_for_pickup", "assigned_to_rider", "picked", "out_for_delivery", "delivered", "shipped", "cancelled", "returned"],
-      default: "placed",
+      enum: ["pending","placed", "accepted_by_seller", "packed", "ready_for_pickup", "assigned_to_rider", "picked", "out_for_delivery", "delivered", "shipped", "cancelled", "returned"],
+      default: "pending",
       index: true
     },
     refundAmount: {

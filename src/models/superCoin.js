@@ -1,79 +1,86 @@
 import mongoose, { Types } from "mongoose";
 
-const superCoin = new mongoose.Schema({
-
+const superCoin = new mongoose.Schema(
+  {
     userId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-        required: true,
-        index: true
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true,
     },
 
     type: {
-        type: String,
-        enum: ["credit", "debit", "expire"],
-        required: true,
-        index: true
+      type: String,
+      enum: ["credit", "debit", "expire"],
+      required: true,
+      index: true,
     },
 
     amount: {
-        type: Number,
-        required: true,
-        min: 1
+      type: Number,
+      required: true,
+      min: 1,
     },
 
     source: {
-        type: String,
-        enum: [
-            "cashback",
-            "order_use",
-            "referral",
-            "campaign_reward",
-            "admin_adjustment",
-            "expiry",
-            "refund"
-        ],
-        required: true
+      type: String,
+      enum: [
+        "cashback",
+        "order_use",
+        "referral",
+        "campaign_reward",
+        "admin_adjustment",
+        "expiry",
+        "refund",
+      ],
+      required: true,
+    },
+
+    status: {
+      type: String,
+      enum: ["pending", "completed", "failed"],
+      default: "pending",
     },
 
     orderId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Order",
-        default: null
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Order",
+      default: null,
     },
 
     campaignId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Campaign",
-        default: null
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Campaign",
+      default: null,
     },
 
     referralUserId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-        default: null
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
     },
 
     balanceAfter: {
-        type: Number,
-        required: true
+      type: Number,
+      required: true,
     },
     description: {
-        type: String,
-        required: true
+      type: String,
+      required: true,
     },
 
     expiryDate: {
-        type: Date,
-        default: null
+      type: Date,
+      default: null,
     },
 
     note: {
-        type: String,
-        default: ""
+      type: String,
+      default: "",
     },
-
-}, { timestamps: true });
+  },
+  { timestamps: true },
+);
 
 superCoin.index({ userId: 1, createdAt: -1 });
 superCoin.index({ expiryDate: 1 });

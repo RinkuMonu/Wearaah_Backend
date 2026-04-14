@@ -12,13 +12,19 @@ import walletSystemModal from "../models/walletSystem.modal.js";
 import superCoin from "../models/superCoin.js";
 import WalletTransactionModal from "../models/WalletTransaction.modal.js";
 import { getIO } from "../config/socket.js";
+import axios from "axios";
 
 // place order by customer
 export const createOrder = async (req, res) => {
   let session;
   try {
-
-    const { items, shippingAddress, paymentMethod, coinUsed = 0, walletUsed = 0 } = req.body;
+    const {
+      items,
+      shippingAddress,
+      paymentMethod,
+      coinUsed = 0,
+      walletUsed = 0,
+    } = req.body;
 
     if (!items || items.length === 0)
       return res.status(400).json({ message: "Order items required" });
@@ -28,21 +34,25 @@ export const createOrder = async (req, res) => {
     session = await mongoose.startSession();
     session.startTransaction();
     let wallet;
-    console.log(req.user)
-    console.log(wallet)
+    console.log(req.user);
+    console.log(wallet);
     if (coinUsed > 0) {
       wallet = await walletSystemModal.findOneAndUpdate(
-        { ownerId: req.user.id, status: "active", superCoinBalance: { $gte: coinUsed } },
-        { $inc: { superCoinBalance: -coinUsed } },
-        { new: true, session }
+        {
+          ownerId: req.user.id,
+          status: "active",
+          superCoinBalance: { $gte: coinUsed },
+        },
+        {
+          $inc: { superCoinBalance: -coinUsed },
+        },
+       { new: true, session }
       );
       // ownerType: "customer",
       if (!wallet) {
         throw new Error("insufficient super coins");
       }
-
     }
-
 
     let orderItems = [];
     let totalAmount = 0;
@@ -53,21 +63,23 @@ export const createOrder = async (req, res) => {
     let hasPaidDelivery = false;
     let sellerId = null;
     let walletUsedAmount = 0;
-    const variantIds = items.map(i => i.variant);
+    const variantIds = items.map((i) => i.variant);
 
     /* -----------------------------
        STEP 2: Bulk fetch products & variants
        sirf 2 DB queries lagenge
     ------------------------------*/
 
-    const variants = await ProductVariant
-      .find({ _id: { $in: variantIds } }).session(session)
-      .select("variantTitle size color sku stock pricing status isActive productId sellerId")
+    const variants = await ProductVariant.find({ _id: { $in: variantIds } })
+      .session(session)
+      .select(
+        "variantTitle size color sku stock pricing status isActive productId sellerId",
+      )
       .populate({
         path: "productId",
         select: "isdeliveryFree saleCount",
-        options: { session }
-      })
+        options: { session },
+      });
 
     // console.log(variants)
 
@@ -76,9 +88,7 @@ export const createOrder = async (req, res) => {
        DB dobara hit nahi hogi
     ------------------------------*/
 
-    const variantMap = new Map(
-      variants.map(v => [v._id.toString(), v])
-    );
+    const variantMap = new Map(variants.map((v) => [v._id.toString(), v]));
     let variantBulkOps = [];
     let productSales = new Map();
 
@@ -87,13 +97,11 @@ export const createOrder = async (req, res) => {
     ------------------------------*/
 
     for (let i of items) {
-
       const variant = variantMap.get(i.variant.toString());
       if (!variant) {
         throw new Error("Product or Variant not found");
       }
       const product = variant.productId;
-
 
       if (!sellerId) {
         sellerId = variant.sellerId;
@@ -102,24 +110,27 @@ export const createOrder = async (req, res) => {
       // multi seller block
       if (sellerId.toString() !== variant.sellerId.toString()) {
         return res.status(400).json({
-          message: "Multiple shop product in one order not allowed"
+          message: "Multiple shop product in one order not allowed",
         });
       }
 
       if (variant.status !== "approved" || variant.isActive == false) {
         return res.status(400).json({
-          message: `${variant.variantTitle} not available for purchase, Please remove this time`
+          message: `${variant.variantTitle} not available for purchase, Please remove this time`,
         });
       }
 
       if (variant.stock < i.quantity) {
-        return res.status(400).json({ success: false, message: `Stock changed, Insufficient stock- ${variant.variantTitle} - ${variant.sku}` });
+        return res.status(400).json({
+          success: false,
+          message: `Stock changed, Insufficient stock- ${variant.variantTitle} - ${variant.sku}`,
+        });
       }
 
-      console.log(variant.productId.isdeliveryFree)
+      console.log(variant.productId.isdeliveryFree);
 
       if (!variant?.productId?.isdeliveryFree) {
-        hasPaidDelivery = true
+        hasPaidDelivery = true;
       }
       /* -----------------------------
          Atomic stock update
@@ -129,8 +140,8 @@ export const createOrder = async (req, res) => {
       variantBulkOps.push({
         updateOne: {
           filter: { _id: variant._id, stock: { $gte: i.quantity } },
-          update: { $inc: { stock: -i.quantity } }
-        }
+          update: { $inc: { stock: -i.quantity } },
+        },
       });
 
       /* -----------------------------
@@ -156,7 +167,7 @@ export const createOrder = async (req, res) => {
         sellingPrice: variant?.pricing?.sellingPrice,
         quantity: i.quantity,
         totalAmountofqty: lineTotal,
-        sku: variant.sku
+        sku: variant.sku,
       });
 
       /* -----------------------------
@@ -165,39 +176,31 @@ export const createOrder = async (req, res) => {
 
       const pid = product._id.toString();
 
-      productSales.set(
-        pid,
-        (productSales.get(pid) || 0) + i.quantity
-      );
-
+      productSales.set(pid, (productSales.get(pid) || 0) + i.quantity);
     }
 
     if (variantBulkOps.length > 0) {
-
-      const variantResult = await ProductVariant.bulkWrite(
-        variantBulkOps,
-        { session }
-      );
+      const variantResult = await ProductVariant.bulkWrite(variantBulkOps, {
+        session,
+      });
 
       if (variantResult.matchedCount !== variantBulkOps.length) {
         throw new Error("Stock update failed for some variants");
       }
-
     }
     /* -----------------------------
        BULK UPDATE PRODUCT SALE COUNT
     ------------------------------*/
 
     if (productSales.size > 0) {
-
       const bulkOps = [];
 
       for (const [productId, qty] of productSales) {
         bulkOps.push({
           updateOne: {
             filter: { _id: productId },
-            update: { $inc: { saleCount: qty } }
-          }
+            update: { $inc: { saleCount: qty } },
+          },
         });
       }
 
@@ -211,28 +214,28 @@ export const createOrder = async (req, res) => {
 
     const commissionPercent = 10;
 
-    platformCommission =
-      Number((totalAmount * commissionPercent / 100).toFixed(2));
+    platformCommission = Number(
+      ((totalAmount * commissionPercent) / 100).toFixed(2),
+    );
 
     // STEP 8: Seller amount
 
-    sellerAmount =
-      Number((totalAmount - platformCommission).toFixed(2));
-
+    sellerAmount = Number((totalAmount - platformCommission).toFixed(2));
 
     // STEP 9: Final payable amount jo customer krega pay
 
     const discountedAmount = totalAmount - coinUsed;
-    finalAmount =
-      Number((discountedAmount + deliveryCharge).toFixed(2));
+    finalAmount = Number((discountedAmount + deliveryCharge).toFixed(2));
 
     let gatewayAmount = finalAmount;
 
     if (walletUsed > 0) {
-      wallet = await walletSystemModal.findOne({
-        ownerId: req.user.id,
-        status: "active"
-      }).session(session);
+      wallet = await walletSystemModal
+        .findOne({
+          ownerId: req.user.id,
+          status: "active",
+        })
+        .session(session);
 
       if (!wallet) {
         throw new Error("Wallet not found");
@@ -241,17 +244,17 @@ export const createOrder = async (req, res) => {
       await walletSystemModal.updateOne(
         {
           _id: wallet._id,
-          availableBalance: { $gte: walletUsedAmount }
+          availableBalance: { $gte: walletUsedAmount },
         },
         {
-          $inc: { availableBalance: -walletUsedAmount }
+          $inc: { availableBalance: -walletUsedAmount },
         },
-        { new: true, session }
+        { new: true, session },
       );
       gatewayAmount = finalAmount - walletUsedAmount;
-
     }
-    console.log("gatewayAmount", gatewayAmount)
+    console.log("gatewayAmount", gatewayAmount);
+
     /* -----------------------------
          STEP 10: Create Order
       ------------------------------*/
@@ -262,7 +265,7 @@ export const createOrder = async (req, res) => {
       items: orderItems,
       shippingAddress,
       paymentMethod,
-      paymentStatus: paymentMethod === "COD" ? "pending" : "paid",
+      paymentStatus: gatewayAmount > 0 ? "pending" : "paid",
       totalAmount,
       deliveryCharge,
       coinUsed,
@@ -275,56 +278,84 @@ export const createOrder = async (req, res) => {
 
     await order.save({ session });
 
-    if (walletUsedAmount > 0) {
-      const updatedWallet = await walletSystemModal.findById(wallet._id).select("availableBalance").session(session);
-      await WalletTransactionModal.create([{
-        walletId: wallet._id,
-        ownerId: req.user.id,
-        type: "debit",
-        reasonSource: "order_payment",
-        description: `order payement for order no ${order.orderNumber}`,
-        amount: walletUsedAmount,
-        referenceId: order._id,
-        referenceModel: "Order",
-        status: "completed",
-        balanceAfter: updatedWallet.availableBalance
-      }], { session });
+    let gatewayResponse = null;
 
+    if (gatewayAmount > 0) {
+      try {
+        const paymentData = {
+          userId: new mongoose.Types.ObjectId("69dccbac89335a563c1f2552"),
+          amount: gatewayAmount,
+          reference: order.orderNumber,
+          email: req.user.email || "test@example.com",
+        };
+        const gatwayAPI = await axios.post(
+          "https://server.finuniques.in/api/v1/payment/payin",
+          paymentData,
+          {
+            headers: {
+              Authorization: `Bearer ${process.env.FINUNIQUES_API_TOKEN}`,
+            }
+          }
+        );
+        gatewayResponse = gatwayAPI.data;
+        console.log("payment gateway response >");
+      } catch (error) {
+        console.log("order create payment gateway error >", error);
+        throw new Error("Payment gateway failed");
+      }
+    }
+
+    if (walletUsedAmount > 0) {
+      const updatedWallet = await walletSystemModal
+        .findById(wallet._id)
+        .select("availableBalance")
+        .session(session);
+      await WalletTransactionModal.create(
+        [
+          {
+            walletId: wallet._id,
+            ownerId: req.user.id,
+            type: "debit",
+            reasonSource: "order_payment",
+            description: `order payement for order no ${order.orderNumber}`,
+            amount: walletUsedAmount,
+            referenceId: order._id,
+            referenceModel: "Order",
+            status: gatewayAmount > 0 ? "pending" : "completed",
+            balanceAfter: updatedWallet.availableBalance,
+          },
+        ],
+        { session },
+      );
     }
     if (coinUsed > 0) {
-      await superCoin.create([{
-        userId: req.user.id,
-        type: "debit",
-        amount: coinUsed,
-        source: "order_use",
-        orderId: order._id,
-        balanceAfter: wallet.superCoinBalance,
-        description: `order payement for order no ${order.orderNumber}`,
-      }], { session })
-
+      await superCoin.create(
+        [
+          {
+            userId: req.user.id,
+            type: "debit",
+            amount: coinUsed,
+            status: gatewayAmount > 0 ? "pending" : "completed",
+            source: "order_use",
+            orderId: order._id,
+            balanceAfter: wallet.superCoinBalance,
+            description: `order payement for order no ${order.orderNumber}`,
+          },
+        ],
+        { session },
+      );
     }
     await session.commitTransaction();
     session.endSession();
 
-    const io = getIO();
-
-    io.to(String(sellerId)).emit("new_order", {
-      orderId: order._id,
-      orderNumber: order.orderNumber,
-    });
-
-
-    await orderQueue.add("order_place_send_mail", {
-      orderId: order._id,
-    });
-
     res.status(201).json({
-      message: "Order placed successfully",
-      order
+      message: "Order created successfully",
+      paymentRequired: gatewayAmount > 0,
+      paymentOptions: gatewayResponse,
+      order,
     });
-
   } catch (error) {
-    console.log("order create error >", error)
+    console.log("order create error >", error);
 
     if (session?.inTransaction()) {
       await session.abortTransaction();
@@ -335,8 +366,120 @@ export const createOrder = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Order creation failed",
-      error: error.message
+      error: error.message,
     });
+  }
+};
+
+export const paymentCallback = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const data = req.body;
+
+    const order = await Order.findOne({ orderNumber: data.orderId }).session(
+      session,
+    );
+    const WalletTransaction = await WalletTransactionModal.findOne({
+      referenceId: order._id,
+    }).session(session);
+
+    const Coin = await superCoin
+      .findOne({ orderId: order._id })
+      .session(session);
+
+    if (!order) throw new Error("Order not found");
+
+    // duplicate callback avoid
+    if (["paid", "failed"].includes(order.paymentStatus)) {
+      return res.json({ message: "Already processed" });
+    }
+
+    // =========================
+    // ✅ SUCCESS CASE
+    // =========================
+    if (data?.responseCode?.toString() === "100") {
+      order.paymentStatus = "paid";
+
+      if (WalletTransaction) {
+        WalletTransaction.status = "completed";
+        await WalletTransaction.save({ session });
+      }
+
+      if (Coin) {
+        Coin.status = "completed";
+        await Coin.save({ session });
+      }
+
+      await order.save({ session });
+      await session.commitTransaction();
+      return res.json({ message: "Payment success handled" });
+    }
+
+    // =========================
+    // ❌ FAILED CASE
+    // =========================
+    if (data?.responseCode?.toString() !== "100") {
+      order.paymentStatus = "failed";
+
+      if (WalletTransaction) {
+        WalletTransaction.status = "failed";
+        await WalletTransaction.save({ session });
+      }
+
+      if (Coin) {
+        Coin.status = "failed";
+        await Coin.save({ session });
+      }
+
+      await order.save({ session });
+      // 🔥 1. STOCK RETURN
+      const bulkOps = order.items.map((item) => ({
+        updateOne: {
+          filter: { _id: item.variantId },
+          update: { $inc: { stock: item.quantity } },
+        },
+      }));
+
+      await ProductVariant.bulkWrite(bulkOps, { session });
+
+      const productBulk = order.items.map((item) => ({
+        updateOne: {
+          filter: { _id: item.productId },
+          update: { $inc: { saleCount: -item.quantity } },
+        },
+      }));
+
+      await Product.bulkWrite(productBulk, { session });
+
+      // 🔥 2. WALLET REFUND
+      if (order.walletUsed > 0) {
+        await walletSystemModal.updateOne(
+          { ownerId: order.customerId },
+          { $inc: { availableBalance: order.walletUsed } },
+          { session },
+        );
+      }
+
+      // 🔥 3. COIN REFUND
+      if (order.coinUsed > 0) {
+        await walletSystemModal.updateOne(
+          { ownerId: order.customerId },
+          { $inc: { superCoinBalance: order.coinUsed } },
+          { session },
+        );
+      }
+
+      await session.commitTransaction();
+
+      return res.json({ message: "Payment failed handled" });
+    }
+  } catch (error) {
+    await session.abortTransaction();
+    return res.status(500).json({ error: error.message });
+  } finally {
+    session.endSession();
   }
 };
 
@@ -347,7 +490,9 @@ export const cancelOrder = async (req, res) => {
     const userId = req.user.id;
     const { reason } = req.body;
     if (!reason) {
-      return res.status(400).json({ message: "Please provide a reason for cancelling the order." });
+      return res
+        .status(400)
+        .json({ message: "Please provide a reason for cancelling the order." });
     }
 
     const order = await orderModal.findById(id);
@@ -361,14 +506,19 @@ export const cancelOrder = async (req, res) => {
     }
 
     // chutiya fruad to nhi kr rha hna
-    if (order.orderStatus === "cancelled" || order.paymentStatus === "refunded") {
-      return res.status(400).json({ message: "Order already cancelled & refunded" });
+    if (
+      order.orderStatus === "cancelled" ||
+      order.paymentStatus === "refunded"
+    ) {
+      return res
+        .status(400)
+        .json({ message: "Order already cancelled & refunded" });
     }
 
     // mkc bar bar cancal ni hona chahiye
     if (["shipped", "delivered"].includes(order.orderStatus)) {
       return res.status(400).json({
-        message: "Order cannot be cancelled at this moment"
+        message: "Order cannot be cancelled at this moment",
       });
     }
 
@@ -388,35 +538,36 @@ export const cancelOrder = async (req, res) => {
     order.refundedAt = new Date();
     await order.save();
 
-    await orderQueue.add("order_cancelled", {
-      orderId: order._id,
-      orderNumber: order.orderNumber,
-      items: order.items,
-      walletRefund,
-      upiRefund,
-      userId: order.customerId,
-      paymentMethod: order.paymentMethod
-    }, {
-      jobId: `cancel-${order._id}`
-    });
+    await orderQueue.add(
+      "order_cancelled",
+      {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        items: order.items,
+        walletRefund,
+        upiRefund,
+        userId: order.customerId,
+        paymentMethod: order.paymentMethod,
+      },
+      {
+        jobId: `cancel-${order._id}`,
+      },
+    );
 
     return res.json({
       success: true,
-      message: "Order cancelled successfully"
+      message: "Order cancelled successfully",
     });
-
   } catch (err) {
     return res.status(500).json({
-      message: err.message
+      message: err.message,
     });
   }
 };
 
-
-// Get USER ORDERS  
+// Get USER ORDERS
 export const getOrders = async (req, res) => {
   try {
-
     const {
       page = 1,
       limit = 10,
@@ -427,7 +578,7 @@ export const getOrders = async (req, res) => {
       productId,
       orderStatus,
       settlementStatus,
-      paymentMethod
+      paymentMethod,
     } = req.query;
 
     const role = req.user.role;
@@ -495,7 +646,6 @@ export const getOrders = async (req, res) => {
     ------------------------------*/
 
     const pipeline = [
-
       { $match: match },
 
       {
@@ -503,47 +653,41 @@ export const getOrders = async (req, res) => {
           from: "Users",
           localField: "customerId",
           foreignField: "_id",
-          as: "customer"
-        }
+          as: "customer",
+        },
       },
       {
         $lookup: {
           from: "riders",
           localField: "riderId",
           foreignField: "_id",
-          as: "rider"
-        }
+          as: "rider",
+        },
       },
 
       {
         $unwind: {
           path: "$customer",
-          preserveNullAndEmptyArrays: true
-        }
+          preserveNullAndEmptyArrays: true,
+        },
       },
       {
         $unwind: {
           path: "$rider",
-          preserveNullAndEmptyArrays: true
-        }
+          preserveNullAndEmptyArrays: true,
+        },
       },
 
       {
-        $sort: { createdAt: -1 }
+        $sort: { createdAt: -1 },
       },
 
       {
         $facet: {
-          data: [
-            { $skip: skip },
-            { $limit: pageSize }
-          ],
-          totalCount: [
-            { $count: "count" }
-          ]
-        }
-      }
-
+          data: [{ $skip: skip }, { $limit: pageSize }],
+          totalCount: [{ $count: "count" }],
+        },
+      },
     ];
 
     const result = await Order.aggregate(pipeline);
@@ -556,22 +700,18 @@ export const getOrders = async (req, res) => {
       orders,
       currentPage: pageNumber,
       totalPages: Math.ceil(totalCount / pageSize),
-      totalCount
+      totalCount,
     });
-
   } catch (error) {
-
     res.status(500).json({
       message: "Failed to fetch orders",
-      error: error.message
+      error: error.message,
     });
-
   }
 };
 
 export const getAllOrders = async (req, res) => {
   try {
-
     const {
       page = 1,
       limit = 10,
@@ -640,7 +780,7 @@ export const getAllOrders = async (req, res) => {
     if (settlementStatus) {
       match.settlementStatus = settlementStatus;
     }
-    console.log(match)
+    console.log(match);
     if (productId) {
       match["items.productId"] = productId;
     }
@@ -650,7 +790,6 @@ export const getAllOrders = async (req, res) => {
     ------------------------------*/
 
     const pipeline = [
-
       { $match: match },
 
       {
@@ -658,8 +797,8 @@ export const getAllOrders = async (req, res) => {
           from: "Users",
           localField: "customerId",
           foreignField: "_id",
-          as: "customer"
-        }
+          as: "customer",
+        },
       },
 
       {
@@ -667,8 +806,8 @@ export const getAllOrders = async (req, res) => {
           from: "sellers",
           localField: "sellerId",
           foreignField: "_id",
-          as: "seller"
-        }
+          as: "seller",
+        },
       },
 
       {
@@ -676,38 +815,37 @@ export const getAllOrders = async (req, res) => {
           from: "riders",
           localField: "riderId",
           foreignField: "_id",
-          as: "rider"
-        }
+          as: "rider",
+        },
       },
 
       {
         $unwind: {
           path: "$customer",
-          preserveNullAndEmptyArrays: true
-        }
+          preserveNullAndEmptyArrays: true,
+        },
       },
 
       {
         $unwind: {
           path: "$seller",
-          preserveNullAndEmptyArrays: true
-        }
+          preserveNullAndEmptyArrays: true,
+        },
       },
 
       {
         $unwind: {
           path: "$rider",
-          preserveNullAndEmptyArrays: true
-        }
+          preserveNullAndEmptyArrays: true,
+        },
       },
 
       {
-        $sort: { createdAt: -1 }
+        $sort: { createdAt: -1 },
       },
 
       {
         $facet: {
-
           data: [
             // {
             //   $project: {
@@ -715,12 +853,10 @@ export const getAllOrders = async (req, res) => {
             //   }
             // },
             { $skip: skip },
-            { $limit: pageSize }
+            { $limit: pageSize },
           ],
 
-          totalCount: [
-            { $count: "count" }
-          ],
+          totalCount: [{ $count: "count" }],
 
           stats: [
             {
@@ -730,11 +866,21 @@ export const getAllOrders = async (req, res) => {
                 lockedAmount: {
                   $sum: {
                     $cond: [
-                      { $in: ["$orderStatus", ["placed", "accepted_by_seller", "packed", "out_for_delivery"]] },
+                      {
+                        $in: [
+                          "$orderStatus",
+                          [
+                            "placed",
+                            "accepted_by_seller",
+                            "packed",
+                            "out_for_delivery",
+                          ],
+                        ],
+                      },
                       "$sellerAmount",
-                      0
-                    ]
-                  }
+                      0,
+                    ],
+                  },
                 },
 
                 deliveredAmount: {
@@ -742,39 +888,27 @@ export const getAllOrders = async (req, res) => {
                     $cond: [
                       { $eq: ["$orderStatus", "delivered"] },
                       "$sellerAmount",
-                      0
-                    ]
-                  }
+                      0,
+                    ],
+                  },
                 },
 
                 deliveredCount: {
                   $sum: {
-                    $cond: [
-                      { $eq: ["$orderStatus", "delivered"] },
-                      1,
-                      0
-                    ]
-                  }
+                    $cond: [{ $eq: ["$orderStatus", "delivered"] }, 1, 0],
+                  },
                 },
 
                 cancelledCount: {
                   $sum: {
-                    $cond: [
-                      { $eq: ["$orderStatus", "cancelled"] },
-                      1,
-                      0
-                    ]
-                  }
+                    $cond: [{ $eq: ["$orderStatus", "cancelled"] }, 1, 0],
+                  },
                 },
 
                 returnedCount: {
                   $sum: {
-                    $cond: [
-                      { $eq: ["$orderStatus", "returned"] },
-                      1,
-                      0
-                    ]
-                  }
+                    $cond: [{ $eq: ["$orderStatus", "returned"] }, 1, 0],
+                  },
                 },
 
                 // 🔥 TOTAL
@@ -783,17 +917,16 @@ export const getAllOrders = async (req, res) => {
                     $cond: [
                       { $eq: ["$orderStatus", "delivered"] },
                       "$sellerAmount",
-                      0
-                    ]
-                  }
+                      0,
+                    ],
+                  },
                 },
-                totalCount: { $sum: 1 }
-              }
-            }
-          ]
-        }
-      }
-
+                totalCount: { $sum: 1 },
+              },
+            },
+          ],
+        },
+      },
     ];
 
     const result = await Order.aggregate(pipeline);
@@ -817,18 +950,15 @@ export const getAllOrders = async (req, res) => {
         cancelledCount: stats.cancelledCount,
         returnedCount: stats.returnedCount,
 
-        totalAmount: stats.totalAmount, // 
-        totalCount: stats.totalCount //order total
-      }
+        totalAmount: stats.totalAmount, //
+        totalCount: stats.totalCount, //order total
+      },
     });
-
   } catch (error) {
-
     res.status(500).json({
       message: "Failed to fetch orders",
-      error: error.message
+      error: error.message,
     });
-
   }
 };
 
@@ -844,11 +974,10 @@ export const getOrderById = async (req, res) => {
 
 //offline Purchase
 const generateInvoiceNumber = async (sellerPrefix, session) => {
-
   const counter = await counterModel.findOneAndUpdate(
     { name: `invoice_${sellerPrefix}` },
     { $inc: { seq: 1 } },
-    { new: true, upsert: true, session }
+    { new: true, upsert: true, session },
   );
 
   const paddedSeq = counter.seq.toString().padStart(6, "0");
@@ -861,52 +990,48 @@ export const OfflinePurchaseInvoiceGen = async (req, res) => {
   const session = await mongoose.startSession();
 
   try {
-
-    const {
-      items,
-      customerName,
-      customerMobile,
-      customerEmail,
-      paymentMode,
-    } = req.body;
+    const { items, customerName, customerMobile, customerEmail, paymentMode } =
+      req.body;
 
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({
         success: false,
-        message: "At least one item required"
+        message: "At least one item required",
       });
     }
-    if (!customerName.trim() || !customerEmail.trim() || !customerMobile.trim()) {
+    if (
+      !customerName.trim() ||
+      !customerEmail.trim() ||
+      !customerMobile.trim()
+    ) {
       return res.status(400).json({
         success: false,
-        message: "Please fill customer details to sent invoice his mail"
+        message: "Please fill customer details to sent invoice his mail",
       });
     }
     for (const item of items) {
-
       const { variantId, quantity, discountPercent = 0 } = item;
 
       if (!mongoose.Types.ObjectId.isValid(variantId)) {
         return res.status(400).json({
           success: false,
-          message: "Invalid variant ID"
+          message: "Invalid variant ID",
         });
       }
 
       if (quantity <= 0) {
         return res.status(400).json({
           success: false,
-          message: "Quantity must be greater than 0"
+          message: "Quantity must be greater than 0",
         });
       }
 
       if (discountPercent < 0 || discountPercent > 90) {
         return res.status(400).json({
           success: false,
-          message: "Discount must be between 0 and 90%"
+          message: "Discount must be between 0 and 90%",
         });
       }
-
     }
 
     const userId = req.user.id;
@@ -928,7 +1053,6 @@ export const OfflinePurchaseInvoiceGen = async (req, res) => {
     let totalDiscount = 0;
 
     for (const item of items) {
-
       const { variantId, quantity, discountPercent = 0 } = item;
 
       if (quantity <= 0) {
@@ -940,18 +1064,18 @@ export const OfflinePurchaseInvoiceGen = async (req, res) => {
           {
             _id: variantId,
             sellerId,
-            stock: { $gte: quantity }
+            stock: { $gte: quantity },
           },
           { $inc: { stock: -quantity } },
-          { new: true, session }
+          { new: true, session },
         )
         .populate({
           path: "productId",
           select: "categoryId",
           populate: {
             path: "categoryId",
-            select: "taxPercent"
-          }
+            select: "taxPercent",
+          },
         });
 
       if (!variant) {
@@ -964,14 +1088,14 @@ export const OfflinePurchaseInvoiceGen = async (req, res) => {
 
       // POS discount applied on MRP
       const sellingPrice = Number(
-        (mrp - (mrp * discountPercent / 100)).toFixed(2)
+        (mrp - (mrp * discountPercent) / 100).toFixed(2),
       );
 
       const linePrice = Number((sellingPrice * quantity).toFixed(2));
 
       // GST inclusive extraction
       const taxableAmount = Number(
-        (linePrice / (1 + taxPercent / 100)).toFixed(2)
+        (linePrice / (1 + taxPercent / 100)).toFixed(2),
       );
 
       const taxAmount = Number((linePrice - taxableAmount).toFixed(2));
@@ -979,7 +1103,7 @@ export const OfflinePurchaseInvoiceGen = async (req, res) => {
       const sgstAmount = Number((taxAmount - cgstAmount).toFixed(2));
 
       const discountAmount = Number(
-        ((mrp * discountPercent) / 100 * quantity).toFixed(2)
+        (((mrp * discountPercent) / 100) * quantity).toFixed(2),
       );
 
       totalDiscount += discountAmount;
@@ -1011,13 +1135,13 @@ export const OfflinePurchaseInvoiceGen = async (req, res) => {
         totaltaxAmount: taxAmount,
 
         subtotal: taxableAmount,
-        total: linePrice
+        total: linePrice,
       });
     }
 
     const invoiceNumber = await generateInvoiceNumber(
       seller.invoicePrefix,
-      session
+      session,
     );
 
     const invoice = await InvoiceOfflineModel.create(
@@ -1035,37 +1159,40 @@ export const OfflinePurchaseInvoiceGen = async (req, res) => {
           grandTotal: Number(grandTotal.toFixed(2)),
           totaldiscount: Number(totalDiscount.toFixed(2)),
 
-
           paymentMode,
-          items: invoiceItems
-        }
+          items: invoiceItems,
+        },
       ],
-      { session }
+      { session },
     );
 
     await session.commitTransaction();
     session.endSession();
 
-    await orderQueue.add("order_offline_Purchase_send_mail", {
-      shop_name: seller.shopName,
-      shop_address: seller.pickupDelivery?.street || "N/A",
-      shop_gstin: seller.GSTIN || "N/A",
-      invoice_number: invoice[0].invoiceNumber,
-      invoice_date: new Date(invoice[0].createdAt).toLocaleDateString(),
-      customer_name: customerName,
-      customer_mobile: customerMobile,
-      customer_email: customerEmail,
-      items: invoiceItems,
-      subtotal: subtotalAmount,
-      cgst_total: Number((gstAmount / 2).toFixed(2)),
-      sgst_total: Number((gstAmount / 2).toFixed(2)),
-      gst_amount: gstAmount,
-      total_discount: totalDiscount,
-      grand_total: grandTotal,
-      payment_mode: paymentMode
-    }, {
-      jobId: `invoice-${invoice[0].invoiceNumber}`
-    })
+    await orderQueue.add(
+      "order_offline_Purchase_send_mail",
+      {
+        shop_name: seller.shopName,
+        shop_address: seller.pickupDelivery?.street || "N/A",
+        shop_gstin: seller.GSTIN || "N/A",
+        invoice_number: invoice[0].invoiceNumber,
+        invoice_date: new Date(invoice[0].createdAt).toLocaleDateString(),
+        customer_name: customerName,
+        customer_mobile: customerMobile,
+        customer_email: customerEmail,
+        items: invoiceItems,
+        subtotal: subtotalAmount,
+        cgst_total: Number((gstAmount / 2).toFixed(2)),
+        sgst_total: Number((gstAmount / 2).toFixed(2)),
+        gst_amount: gstAmount,
+        total_discount: totalDiscount,
+        grand_total: grandTotal,
+        payment_mode: paymentMode,
+      },
+      {
+        jobId: `invoice-${invoice[0].invoiceNumber}`,
+      },
+    );
     // {                                   // options
     //   jobId: "invoice-INV123",
     //     attempts: 3,
@@ -1079,11 +1206,9 @@ export const OfflinePurchaseInvoiceGen = async (req, res) => {
     return res.status(201).json({
       success: true,
       message: "Say! Thank You To Customer",
-      data: invoice[0]
+      data: invoice[0],
     });
-
   } catch (error) {
-
     if (session.inTransaction()) {
       await session.abortTransaction();
     }
@@ -1092,7 +1217,7 @@ export const OfflinePurchaseInvoiceGen = async (req, res) => {
 
     return res.status(400).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -1100,16 +1225,19 @@ export const OfflinePurchaseInvoiceGen = async (req, res) => {
 // GET /order/unseen
 export const getUnseenOrders = async (req, res) => {
   try {
-    const count = await orderModal.countDocuments({
-      sellerId: req.user.id,
-      isSeenBySeller: false,
-    }).select("sellerId isSeenBySeller").sort({ createdAt: -1 }).lean()
-    if (!count)
-      console.log(count)
+    const count = await orderModal
+      .countDocuments({
+        sellerId: req.user.id,
+        isSeenBySeller: false,
+      })
+      .select("sellerId isSeenBySeller")
+      .sort({ createdAt: -1 })
+      .lean();
+    if (!count) console.log(count);
 
     res.json({
       success: true,
-      count
+      count,
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -1121,8 +1249,8 @@ export const markOrdersSeen = async (req, res) => {
   try {
     await orderModal.updateMany(
       { sellerId: req.user.id, isSeenBySeller: false },
-      { isSeenBySeller: true }
-    )
+      { isSeenBySeller: true },
+    );
 
     res.json({ success: true });
   } catch (err) {
@@ -1133,14 +1261,13 @@ export const markOrdersSeen = async (req, res) => {
 // order accept by seller
 export const acceptOrderBySeller = async (req, res) => {
   try {
-
     const { orderId } = req.params;
     const sellerId = req.user?.id;
 
     if (!orderId)
       return res.status(400).json({
         success: false,
-        message: "Please select order"
+        message: "Please select order",
       });
 
     /* -----------------------------
@@ -1148,37 +1275,39 @@ export const acceptOrderBySeller = async (req, res) => {
        Single query → optimized
     ------------------------------*/
 
-    const order = await orderModal.findOneAndUpdate(
-      {
-        _id: orderId,
-        sellerId: sellerId,
-        // orderStatus: "placed"
-      },
-      {
-        $set: {
-          orderStatus: "accepted_by_seller",
-          acceptedAtbySeller: new Date()
-        }
-      },
-      {
-        new: true,
-        lean: true
-      }
-    ).select("orderNumber orderStatus sellerId acceptedAtbySeller");
+    const order = await orderModal
+      .findOneAndUpdate(
+        {
+          _id: orderId,
+          sellerId: sellerId,
+          // orderStatus: "placed"
+        },
+        {
+          $set: {
+            orderStatus: "accepted_by_seller",
+            acceptedAtbySeller: new Date(),
+          },
+        },
+        {
+          new: true,
+          lean: true,
+        },
+      )
+      .select("orderNumber orderStatus sellerId acceptedAtbySeller");
 
     if (!order) {
       return res.status(404).json({
         success: false,
         message:
-          "Order not found, not assigned to this seller, or already processed"
+          "Order not found, not assigned to this seller, or already processed",
       });
     }
     // console.log(order)
 
     const oq = await orderQueue.add("accepted_by_seller_notify_customer", {
-      orderId: order._id
+      orderId: order._id,
     });
-    console.log("oq", oq)
+    console.log("oq", oq);
     /* -----------------------------
        Success response
     ------------------------------*/
@@ -1186,22 +1315,18 @@ export const acceptOrderBySeller = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Order accepted successfully",
-      order
+      order,
     });
-
   } catch (error) {
-
     console.error("Accept Order Error:", error);
 
     return res.status(500).json({
       success: false,
       message: "Failed to accept order",
-      error: error.message
+      error: error.message,
     });
-
   }
 };
-
 
 export const deleteOrder = async (req, res) => {
   const order = await Order.findByIdAndDelete(req.params.id);
