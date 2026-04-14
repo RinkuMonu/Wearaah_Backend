@@ -15,23 +15,15 @@ const categorySchema = new mongoose.Schema(
       required: true,
       trim: true,
       enum: [
-        "Top Wear",
-        "Bottom Wear",
-        "Footwear",
-        "Innerwear",
-        "Winter Wear",
+        "Western Wear",
         "Ethnic Wear",
-        "Activewear",
+        "Innerwear",
         "Sportswear",
         "Sleepwear",
         "Swimwear",
         "Accessories",
-        "Plus Size",
-        "Maternity Wear",
-        "Loungewear",
-        "Formal Wear",
-        "Casual Wear",
-        "Party Wear"
+        "Winter wear",
+        "Summer wear",
       ]
     },
     description: {

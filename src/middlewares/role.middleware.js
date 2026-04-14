@@ -1,5 +1,7 @@
+import sellerModal from "../models/roleWiseModal/seller.modal.js";
+
 export const isSuperAdmin = (req, res, next) => {
-  if (req.user.role !== "superadmin") {
+  if (req.user?.role !== "superadmin") {
     return res.status(403).json({
       success: false,
       message: "access denied it is only for superadmin"
@@ -8,7 +10,7 @@ export const isSuperAdmin = (req, res, next) => {
   next();
 };
 export const isSeller = (req, res, next) => {
-  if (req.user.role !== "seller") {
+  if (req.user?.role !== "seller") {
     return res.status(403).json({
       success: false,
       message: "access denied it is only for seller"
@@ -17,7 +19,7 @@ export const isSeller = (req, res, next) => {
   next();
 };
 export const isRider = (req, res, next) => {
-  if (req.user.role !== "rider") {
+  if (req.user?.role !== "rider") {
     return res.status(403).json({
       success: false,
       message: "access denied it is only for rider"
@@ -28,12 +30,34 @@ export const isRider = (req, res, next) => {
 
 
 
-export const isBothRole = (req, res, next) => {
-  if (req.user.role !== "seller" && req.user.role !== "superadmin") {
-    return res.status(403).json({
+export const isBothRole = async (req, res, next) => {
+  try {
+    const role = req.user?.role;
+    const userId = req.user?.id;
+    if (!["seller", "superadmin"].includes(role)) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. Only seller or super admin allowed"
+      });
+    }
+
+    if (role === "seller") {
+      const seller = await sellerModal.findOne({ userId });
+
+      if (!seller || seller.isApproved === false) {
+        return res.status(403).json({
+          code: "FORCE_LOGOUT",
+          success: false,
+          message: "Your account has not been approved yet.Please wait until it is approved."
+        });
+      }
+    }
+
+    next();
+  } catch (error) {
+    return res.status(500).json({
       success: false,
-      message: "access denied it is only for seller or super admin"
+      message: "Middleware error"
     });
   }
-  next();
 };
