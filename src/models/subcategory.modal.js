@@ -22,11 +22,25 @@ const subcategorySchema = new mongoose.Schema({
         default: "alpha"
     },
 
+    wearType: {
+        type: String,
+        enum: ["topwear", "bottomwear", "fullwear", "innerwear"],
+        required: true,
+        index: true
+    },
+
+    gender: {
+        type: [String],
+        enum: ["Men", "Women", "Boys", "Girls", "Kids", "Unisex"],
+        required: true,
+        index: true,
+    },
+
     showOnHome: {
         type: Boolean,
         default: false
     },
-    
+
     displayOrder: {
         type: Number,
         default: 0
