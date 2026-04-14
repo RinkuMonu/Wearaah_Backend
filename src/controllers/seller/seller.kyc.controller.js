@@ -464,9 +464,6 @@ export const saveBasicInfo = async (req, res) => {
     }
 };
 
-
-
-
 // step -3
 export const saveAddress = async (req, res) => {
     try {
@@ -517,8 +514,6 @@ export const saveAddress = async (req, res) => {
         res.status(500).json({ success: false, message: err.message });
     }
 };
-
-
 
 // step -4
 export const saveBankDetails = async (req, res) => {
