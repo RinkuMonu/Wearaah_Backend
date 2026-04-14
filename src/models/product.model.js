@@ -40,7 +40,7 @@ const productSchema = new mongoose.Schema(
       maxlength: 2000,
     },
     gender: {
-      type: String,
+      type: [String],
       enum: ["Men", "Women", "Boys", "Girls", "Kids", "Unisex"],
       required: true,
       index: true,

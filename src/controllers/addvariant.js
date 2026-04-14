@@ -4,6 +4,7 @@ import ProductVariant from "../models/productVariant.model.js";
 import Wishlist from "../models/wishlist.model.js";
 import { indexVariant } from "../config/productIndex.js";
 import client from "../config/elasticsearch.js";
+import reviewModel from "../models/review.model.js";
 
 /* =========================
    ADD VARIANT (ADMIN)
@@ -400,7 +401,7 @@ export const updateVariant = async (req, res) => {
     }
 
     console.log("variant.sellerId:", variant.sellerId.toString());
-console.log("req.user.id:", req.user.id.toString());
+    console.log("req.user.id:", req.user.id.toString());
 
     // if (variant.sellerId.toString() !== req.user.id.toString()) {
     //   return res.status(403).json({
@@ -409,7 +410,7 @@ console.log("req.user.id:", req.user.id.toString());
     //   });
     // }
 
-    
+
     // let variantImages = variant.variantImages;
 
     // if (req.files?.length) {
@@ -418,31 +419,31 @@ console.log("req.user.id:", req.user.id.toString());
 
     let variantImages = [];
 
-// ✅ existing images (jo user ne delete nahi ki)
-if (req.body.existingImages) {
-  try {
-    variantImages = JSON.parse(req.body.existingImages);
-  } catch (err) {
-    return res.status(400).json({
-      success: false,
-      message: "Invalid existingImages format",
-    });
-  }
-}
+    // ✅ existing images (jo user ne delete nahi ki)
+    if (req.body.existingImages) {
+      try {
+        variantImages = JSON.parse(req.body.existingImages);
+      } catch (err) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid existingImages format",
+        });
+      }
+    }
 
-// ✅ new images add karo
-if (req.files && req.files.length > 0) {
-  const newImages = req.files.map(
-    (file) => `/uploads/${file.filename}`
-  );
+    // ✅ new images add karo
+    if (req.files && req.files.length > 0) {
+      const newImages = req.files.map(
+        (file) => `/uploads/${file.filename}`
+      );
 
-  variantImages = [...variantImages, ...newImages];
-}
+      variantImages = [...variantImages, ...newImages];
+    }
 
-// ✅ fallback (agar kuch bhi nahi aaya)
-if (variantImages.length === 0) {
-  variantImages = variant.variantImages;
-}
+    // ✅ fallback (agar kuch bhi nahi aaya)
+    if (variantImages.length === 0) {
+      variantImages = variant.variantImages;
+    }
 
     /* -------- PARSE PRICING -------- */
 
@@ -630,8 +631,32 @@ export const getVariantsByProduct = async (req, res) => {
 
     const variants = await ProductVariant.find(
       filter
-    ).select(selectFields).sort({ price: 1 }).lean();
+    ).populate("productId").select(selectFields).sort({ price: 1 }).lean();
 
+    const variantIds = variants.map(v => v._id);
+
+    const reviews = await reviewModel.aggregate([
+      {
+        $match: {
+          variantId: { $in: variantIds }
+        }
+      },
+      {
+        $group: {
+          _id: "$variantId",
+          avgRating: { $avg: "$rating" },
+          totalReviews: { $sum: 1 }
+        }
+      }
+    ]);
+    const reviewMap = {};
+
+    reviews.forEach(r => {
+      reviewMap[r._id.toString()] = {
+        avgRating: Number(r.avgRating.toFixed(1)),
+        totalReviews: r.totalReviews
+      };
+    });
     let wishSet = new Set();
 
     if (userId) {
@@ -646,7 +671,10 @@ export const getVariantsByProduct = async (req, res) => {
 
     const updatedVariants = variants.map(v => ({
       ...v,
-      isWishlisted: wishSet.has(v._id.toString())
+      isWishlisted: wishSet.has(v._id.toString()),
+      rating: reviewMap[v._id.toString()]?.avgRating || 0,
+      totalReviews: reviewMap[v._id.toString()]?.totalReviews || 0
+
     }));
 
     return res.status(200).json({
@@ -713,7 +741,11 @@ export const getAllVariants = async (req, res) => {
     } = req.query;
 
     const query = {};
-
+    const userId = req.user?.id;
+    const role = req.user?.role;
+    if (role === "seller") {
+      query.sellerId = userId;
+    }
     /* ---------------- SEARCH ---------------- */
     if (search) {
       query.$or = [
@@ -767,7 +799,10 @@ export const getAllVariants = async (req, res) => {
       ProductVariant.find(query)
         .populate({
           path: "productId",
-          match: category ? { subCategoryId: category } : {},
+          match: {
+            ...(category && { subCategoryId: category }),
+            ...(role === "seller" && { sellerId: userId })
+          },
           select: "name category",
         })
         .sort(sortOption)

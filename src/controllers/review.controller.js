@@ -263,6 +263,41 @@ export const getReviewsByVariant = async (req, res) => {
   }
 };
 
+// get user order review in profile 
+export const getReviewsByOrder = async (req, res) => {
+  try {
+    const { orderId } = req.query;
+
+    if (!orderId) {
+      return res.status(400).json({
+        success: false,
+        message: "variantId is required"
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid variantId"
+      });
+    }
+    const review = await Review.findOne({ orderId: orderId }).populate("userId", "name email mobile")
+
+    return res.json({
+      success: true,
+      review
+    });
+
+  } catch (error) {
+    console.error("Get Reviews Error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
 
 
 
