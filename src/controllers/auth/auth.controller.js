@@ -694,7 +694,7 @@ export const getProfile = async (req, res) => {
 
 export const getSellerProfile = async (req, res) => {
     try {
-        const sellerId = req.user?.id;
+        const sellerId = req.params.id;
         // console.log("Fetching seller profile for user ID:", req.user);
 
         // ✅ 1. Auth validation
@@ -708,6 +708,8 @@ export const getSellerProfile = async (req, res) => {
         // ✅ 2. Query with projection + lean (FAST)
         const seller = await sellerModal
             .findOne({ userId: sellerId })
+              .populate("userId", "name email mobile avatar platformId")
+          
             .lean();
 
         // ✅ 3. Not found check

@@ -73,6 +73,13 @@ export const getAllSellers = async (req, res) => {
         //     ];
         // }
 
+        if (search) {
+            filter.$or = [
+                { shopName: new RegExp(search, "i") },
+                ...(userIds.length ? [{ userId: { $in: userIds } }] : [])
+            ];
+        }
+
         const sellers = await sellerModal
             .find(filter)
             .select(
@@ -348,7 +355,7 @@ export const verification = async (req, res) => {
                 name,
                 email,
                 mobile: Number(mobile),
-                role: "customer"
+                role: "seller"
             });
         }
 
@@ -380,7 +387,7 @@ export const verification = async (req, res) => {
                 message: "Your KYC is already submitted. Our team will contact you shortly.",
                 token: generateToken(user, sessionId),
                 user,
-                step: 5
+                step: 1
             });
         }
 
@@ -647,7 +654,7 @@ export const saveDocuments = async (req, res) => {
 
 export const updateSellerProfile = async (req, res) => {
     try {
-        const sellerId = req.user?.id;
+        const sellerId = req.params.id;
 
         if (!mongoose.Types.ObjectId.isValid(sellerId)) {
             return res.status(400).json({
