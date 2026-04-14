@@ -36,13 +36,13 @@ addvarintRoute.get("/:id", getVariantById);
 /* ADMIN */
 addvarintRoute.get(
     "/admin/variants",
-    // protect,
-    // isSeller,
-    // isSuperAdmin,
+    protect,
+    isBothRole,
     getAllVariants
 );
 addvarintRoute.get(
     "/admin/qc-variants/:productId",
+    protect,
     isBothRole,
     getAllQcVariants
 );
