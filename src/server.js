@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+dotenv.config({ path: "../.env" });
 import connectDB from "./config/db.js";
 import http from "http";
 import adminRoutes from "./routes/admin.routes.js";
@@ -34,7 +35,7 @@ import { setupBullBoard } from "./QueueMonitoring/MonitoringQu.js";
 import testRouter from "./routes/TestRoute/test.route.js";
 import { createVariantProductIndex } from "./config/productIndex.js";
 const server = http.createServer(app);
-dotenv.config();
+// dotenv.config();
 connectDB();
 setupBullBoard(app);
 
