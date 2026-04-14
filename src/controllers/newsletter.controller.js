@@ -18,7 +18,7 @@ export const subscribeNewsletter = async (req, res) => {
     let subscriber = await Newsletter.findOne({ email });
 
     if (subscriber && subscriber.isSubscribed) {
-      return res.status(409).json({
+      return res.status(201).json({
         success: false,
         message: "Email already subscribed"
       });

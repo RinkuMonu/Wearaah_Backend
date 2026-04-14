@@ -694,7 +694,7 @@ export const getProfile = async (req, res) => {
 
 export const getSellerProfile = async (req, res) => {
     try {
-        const sellerId = req.user?.id;
+        const sellerId = req.params.id;
         // console.log("Fetching seller profile for user ID:", req.user);
 
         // ✅ 1. Auth validation
@@ -708,6 +708,8 @@ export const getSellerProfile = async (req, res) => {
         // ✅ 2. Query with projection + lean (FAST)
         const seller = await sellerModal
             .findOne({ userId: sellerId })
+              .populate("userId", "name email mobile avatar platformId")
+          
             .lean();
 
         // ✅ 3. Not found check
@@ -831,12 +833,17 @@ export const getAllUsers = async (req, res) => {
 
 
         if (search) {
+            const isNumber = !isNaN(search);
             filter.$or = [
                 { name: { $regex: search, $options: "i" } },
                 { email: { $regex: search, $options: "i" } },
-                { mobile: { $regex: search, $options: "i" } },
+                // { mobile: { $regex: search, $options: "i" } },
                 { platformId: { $regex: search, $options: "i" } }
             ];
+            // 👉 Only add mobile if it's number
+            if (isNumber) {
+                filter.$or.push({ mobile: Number(search) });
+            }
         }
 
         const sortOrder = order === "asc" ? 1 : -1;

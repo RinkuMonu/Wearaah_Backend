@@ -13,10 +13,26 @@ export const subcreateCategory = async (req, res) => {
             categoryId,
             sizeType = "alpha",
             variantAttributes,
-            displayOrder
+            displayOrder,
+            wearType,
+            gender = []
         } = req.body;
         let disNumber = Number(displayOrder)
-        const showOnHome = req.body.showOnHome === "true" || req.body.showOnHome === true;
+        let parsedGender = [];
+
+        if (gender) {
+            parsedGender =
+                typeof gender === "string"
+                    ? JSON.parse(gender)
+                    : gender;
+        }
+
+        if (!Array.isArray(parsedGender) || parsedGender.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "At least one gender is required"
+            });
+        }
 
         if (!name || !categoryId) {
             return res.status(400).json({
@@ -24,6 +40,7 @@ export const subcreateCategory = async (req, res) => {
                 message: "name and categoryId are required"
             });
         }
+        const showOnHome = req.body.showOnHome === "true" || req.body.showOnHome === true;
 
         const exists = await SubCategory.findOne({
             $or: [
@@ -84,7 +101,9 @@ export const subcreateCategory = async (req, res) => {
             attributes,
             variantAttributes: parsedVariantAttributes,
             bannerimage,
-            smallimage
+            smallimage,
+            wearType,
+            gender: parsedGender
         });
 
         return res.status(201).json({
@@ -149,7 +168,7 @@ export const subgetCategories = async (req, res) => {
 
         const categories = await SubCategory.find(filter).populate({
             path: "categoryId",
-            select: "name"
+            select: "name slug"
         })
             .sort({ [sort]: -1 })
             .skip(skip)
@@ -164,7 +183,7 @@ export const subgetCategories = async (req, res) => {
             page: Number(page),
             limit: Number(limit),
             categories
-        }); 
+        });
 
     } catch (error) {
 
@@ -277,8 +296,10 @@ export const subupdateCategory = async (req, res) => {
             });
         }
         if (req.body.displayOrder) updates.displayOrder = Number(req.body.displayOrder);
-        if (req.body.showOnHome !== undefined) updates.showOnHome = req.body.showOnHome;
-
+        if (req.body.showOnHome !== undefined) {
+            updates.showOnHome =
+                req.body.showOnHome === "true" || req.body.showOnHome === true;
+        }
 
         // 🔹 ATTRIBUTES PARSE
         if (updates.attributes) {
@@ -305,6 +326,37 @@ export const subupdateCategory = async (req, res) => {
         if (req.files?.smallimage?.[0]) {
             deleteLocalFile(subCategory.smallimage);
             updates.smallimage = `/uploads/${req.files.smallimage[0].filename}`;
+        }
+        // 🔹 GENDER PARSE
+        if (updates.gender) {
+            try {
+                updates.gender =
+                    typeof updates.gender === "string"
+                        ? JSON.parse(updates.gender)
+                        : updates.gender;
+            } catch (err) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid gender format"
+                });
+            }
+
+            if (!Array.isArray(updates.gender) || updates.gender.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: "At least one gender is required"
+                });
+            }
+        }
+        if (updates.wearType !== undefined) {
+            const allowed = ["topwear", "bottomwear", "fullwear", "innerwear"];
+
+            if (!allowed.includes(updates.wearType)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid wearType"
+                });
+            }
         }
 
         const updated = await SubCategory.findByIdAndUpdate(
@@ -333,26 +385,31 @@ export const subupdateCategory = async (req, res) => {
 ========================= */
 export const subdeleteCategory = async (req, res) => {
     try {
-        const category = await SubCategory.findByIdAndDelete(
-            req.params.id,
-            { new: true }
-        );
+        const subCategory = await SubCategory.findById(req.params.id);
 
-        if (!category) {
+        if (!subCategory) {
             return res.status(404).json({
                 success: false,
                 message: "Category not found"
             });
         }
 
+        // 🔥 TOGGLE LOGIC
+        subCategory.isActive = !subCategory?.isActive;
+        console.log(subCategory)
+
+        await subCategory.save();
+
         return res.status(200).json({
             success: true,
-            message: "Category deleted successfully"
+            message: `Category ${subCategory.isActive ? "activated" : "deactivated"} successfully`,
+            subCategory
         });
+
     } catch (error) {
         return res.status(500).json({
             success: false,
-            message: "Failed to delete category"
+            message: "Failed to update category status"
         });
     }
 };

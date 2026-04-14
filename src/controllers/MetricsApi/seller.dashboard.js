@@ -6,12 +6,12 @@ import walletSystemModal from "../../models/walletSystem.modal.js";
 export const getSellerDashboard = async (req, res) => {
     try {
 
-        // const seller = await sellerModal.findOne({ userId: req.user.id || req.user._id, kycStatus: "approved" }).select("_id kycStatus");
-        // if (!seller) {
-        //     return res.status(404).json({ message: "Seller not found or KYC not approved" });
-        // }
-        // const sellerId = seller._id;
-        const sellerId = "69930f6dbc49845122265455";
+        const seller = await sellerModal.findOne({ userId: req.user.id || req.user._id, kycStatus: "verified" }).select("_id kycStatus");
+        if (!seller) {
+            return res.status(404).json({ message: "Seller not found or KYC not approved" });
+        }
+        const sellerId = seller._id;
+        // const sellerId = "69930f6dbc49845122265455";
 
         const [
             totalProducts,

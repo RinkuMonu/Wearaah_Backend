@@ -27,7 +27,15 @@ const bannerSchema = new mongoose.Schema(
 
     position: {
       type: String,
-      enum: ["homepage-top", "homepage-bottom", "sidebar", "footer", "custom"],
+      enum: [
+        "homepage-top",
+        "homepage-bottom",
+        "summer-sale",
+        "delivery",
+        "sidebar",
+        "footer",
+        "custom",
+      ], 
       default: "homepage-top",
       index: true,
     },

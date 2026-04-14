@@ -35,8 +35,8 @@ subcategoryRoute.put(
     subupdateCategory
 );
 
-subcategoryRoute.delete(
-    "/:id",
+subcategoryRoute.put(
+    "/status/:id",
     protect,
     isSuperAdmin,
     subdeleteCategory

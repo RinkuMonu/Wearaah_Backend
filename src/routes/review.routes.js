@@ -3,6 +3,7 @@ import {
   createReview,
   deleteReview,
   getMyReviews,
+  getReviewsByOrder,
   getReviewsByVariant,
   toggleReaction,
   updateReview,
@@ -25,6 +26,7 @@ reviewRoute.post(
 reviewRoute.get("/getreviews", protect, getMyReviews);
 reviewRoute.post("/like/:reviewId", protect, toggleReaction);
 reviewRoute.get("/", getReviewsByVariant);
+reviewRoute.get("/byorderID", protect, getReviewsByOrder);
 reviewRoute.put("/update/:reviewId", protect, updateReview);
 reviewRoute.delete("/delete/:reviewId", protect, deleteReview);
 

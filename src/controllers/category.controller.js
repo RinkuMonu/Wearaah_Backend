@@ -8,7 +8,7 @@ import Category from "../models/category.model.js";
 export const createCategory = async (req, res) => {
     try {
         const { name, description, displayOrder } = req.body;
-        if (!req.files.bannerimage || !req.files.smallimage || !name || !description) {
+        if (!req.files.smallimage || !name || !description) {
             return res.status(400).json({
                 success: false,
                 message: "name, description, Banner image and small image are required"
@@ -81,7 +81,7 @@ export const createCategory = async (req, res) => {
    GET /api/categories
 ========================= */
 export const getCategories = async (req, res) => {
-    try {        
+    try {
 
         const {
             search,
@@ -143,7 +143,7 @@ export const getCategories = async (req, res) => {
         });
 
     } catch (error) {
-  
+
         console.error("GET CATEGORY ERROR:", error);
 
         return res.status(500).json({

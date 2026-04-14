@@ -12,7 +12,7 @@ authRoute.post("/register/via/otp", registerViaOtp);
 authRoute.post("/login", login);
 authRoute.post("/logout", logout);
 authRoute.get("/me", protect, getProfile);
-authRoute.get("/seller/me", protect, isBothRole, getSellerProfile);
+authRoute.get("/seller/me/:id", protect, isBothRole, getSellerProfile);
 authRoute.get("/get/wallet", protect, getMyWallet);
 authRoute.get("/alluser", protect, isSuperAdmin, getAllUsers);
 authRoute.put("/update", protect, upload.single("avatar"), updateProfile);
