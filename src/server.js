@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+dotenv.config({ path: "../.env" });
 import connectDB from "./config/db.js";
 import http from "http";
 import adminRoutes from "./routes/admin.routes.js";
@@ -32,9 +33,8 @@ const app = express();
 import { initSocket } from "./config/socket.js";
 import { setupBullBoard } from "./QueueMonitoring/MonitoringQu.js";
 import testRouter from "./routes/TestRoute/test.route.js";
-import { createVariantProductIndex } from "./config/productIndex.js";
 const server = http.createServer(app);
-dotenv.config();
+// dotenv.config();
 connectDB();
 setupBullBoard(app);
 
@@ -61,7 +61,6 @@ app.use(
     })
 );
 initSocket(server);
-createVariantProductIndex();
 
 // app.use(cors("*"));
 app.use(express.json());
@@ -123,6 +122,9 @@ app.use((err, req, res, next) => {
 
 export default app;
 
+// server.listen(process.env.PORT, () => {
+//     console.log(`Server running on port ${process.env.PORT}`);
+// });
 
 server.listen(5000, () => {
     console.log("Server running on port 5000");

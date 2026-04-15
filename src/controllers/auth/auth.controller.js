@@ -43,12 +43,12 @@ export const registerViaOtp = async (req, res) => {
 
         const otpRecord = await otpModal.findOne({ mobile, otp });
 
-        // if (!otpRecord || otpRecord.expiresAt < Date.now()) {
-        //     return res.status(400).json({
-        //         success: false,
-        //         message: "Invalid or expired OTP"
-        //     });
-        // }
+        if (!otpRecord || otpRecord.expiresAt < Date.now()) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid or expired OTP"
+            });
+        }
 
         // ✅ OTP valid → delete it
         await otpModal.deleteMany({ mobile });

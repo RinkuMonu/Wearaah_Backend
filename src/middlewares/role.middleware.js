@@ -42,13 +42,13 @@ export const isBothRole = async (req, res, next) => {
     }
 
     if (role === "seller") {
-      const seller = await sellerModal.findOne({ userId });
+      const seller = await sellerModal.findOne({ userId }).select("isApproved kycStatus");
 
-      if (!seller || seller.isApproved === false) {
+      if (!seller || seller.kycStatus === "pending") {
         return res.status(403).json({
           code: "FORCE_LOGOUT",
           success: false,
-          message: "Your account has not been approved yet.Please wait until it is approved."
+          message: "Your account has not been approved yet. Please wait until it is approved."
         });
       }
     }

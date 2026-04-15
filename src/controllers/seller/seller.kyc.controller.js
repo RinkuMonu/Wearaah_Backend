@@ -32,9 +32,9 @@ export const getAllSellers = async (req, res) => {
             city,
             kycStatus,
             kycStep,
-            isApproved,
             sortBy = "createdAt",
-            order = "desc"
+            order = "desc",
+            onlyPendingAndSubmit = false
         } = req.query;
 
         const skip = (page - 1) * limit;
@@ -48,6 +48,7 @@ export const getAllSellers = async (req, res) => {
                 $or: [
                     { name: new RegExp(search, "i") },
                     { email: new RegExp(search, "i") },
+                    { platformId: new RegExp(search, "i") },
                     ...(isNumber ? [{ mobile: Number(search) }] : [])
                 ]
             }).select("_id").lean();
@@ -57,15 +58,14 @@ export const getAllSellers = async (req, res) => {
 
         /* 🔎 FILTER */
         const filter = {};
+        if (onlyPendingAndSubmit) { // for pending kyc
+            filter.kycStatus = { $in: ["pending", "submitted", "rejected"] };
+        } else {
+            filter.kycStatus = "verified"
+        }
 
         if (city) filter["pickupDelivery.city"] = city;
-        if (kycStatus) filter.kycStatus = kycStatus;
         if (kycStep) filter.kycStep = Number(kycStep);
-        if (isApproved === "true") {
-            filter.isApproved = true;
-        } else if (isApproved === "false") {
-            filter.isApproved = false;
-        }
         // if (search) {
         //     filter.$or = [
         //         { shopName: new RegExp(search, "i") },
@@ -83,9 +83,9 @@ export const getAllSellers = async (req, res) => {
         const sellers = await sellerModal
             .find(filter)
             .select(
-                "shopName kycStatus kycStep isApproved createdAt userId"
+                "shopName kycStatus kycStep createdAt userId"
             )
-            .populate("userId", "name mobile isActive") // only required
+            .populate("userId", "name mobile isActive platformId") // only required
             .sort({ [sortBy]: order === "asc" ? 1 : -1 })
             .skip(skip)
             .limit(Number(limit))
@@ -290,8 +290,6 @@ export const submitSellerKyc = async (req, res) => {
             },
             kycDocuments: documents,
             kycStatus: "pending",
-            isApproved: false,
-            status: "active"
         };
 
         if (!seller) {
@@ -342,12 +340,20 @@ export const verification = async (req, res) => {
 
         // await otpModal.deleteMany({ mobile });
 
-        // 🔥 FIND USER FIRST
-        const existingUser = await userModal.findOne({
-            $or: [{ email }, { mobile }]
-        });
+        let user = await userModal.findOne({ mobile: Number(mobile) });
+        const isNewUser = !user;
 
-        let user = existingUser;
+        let emailExists = null;
+        if (email) {
+            emailExists = await userModal.findOne({ email });
+        }
+
+        if (emailExists && emailExists.mobile !== Number(mobile)) {
+            return res.status(400).json({
+                success: false,
+                message: "Email already in use with another account"
+            });
+        }
 
         // 🔥 CREATE IF NEW
         if (!user) {
@@ -355,8 +361,13 @@ export const verification = async (req, res) => {
                 name,
                 email,
                 mobile: Number(mobile),
-                role: "seller"
+                role: "seller",
+                isActive: false
             });
+        } else {
+            user.name = name;
+            user.email = email;
+            await user.save();
         }
 
         await walletSystemModal.updateOne(
@@ -376,10 +387,17 @@ export const verification = async (req, res) => {
         );
 
         // 🔥 SELLER CHECK
-        const seller = await sellerModal
+        let seller = await sellerModal
             .findOne({ userId: user._id })
             .select("kycStep kycStatus");
 
+        if (!seller) {
+            seller = await sellerModal.create({
+                userId: user._id,
+                kycStep: 1,
+                kycStatus: "pending"
+            });
+        }
         // 🔥 KYC ALREADY SUBMITTED
         if (seller && seller.kycStatus === "submitted") {
             return res.status(200).json({
@@ -390,21 +408,25 @@ export const verification = async (req, res) => {
                 step: 1
             });
         }
+        if (seller && seller?.kycStatus === "verified") {
+            return res.json({
+                success: true,
+                message: "KYC already verified please check your email to get id password",
+                step: 1
+            });
+        }
 
-        let nextStep = 1;
+        let nextStep = 2;
 
-        if (seller) {
-            nextStep = seller.kycStep || 1;
-            nextStep = nextStep >= 5 ? 5 : nextStep + 1;
+        if (seller?.kycStep) {
+            nextStep = seller.kycStep >= 5 ? 5 : seller.kycStep + 1;
         }
 
         const token = generateToken(user, sessionId);
 
         return res.status(200).json({
             success: true,
-            message: existingUser
-                ? `Welcome back ${user.name || "User"}, continue your onboarding`
-                : "Verification successful",
+            message: isNewUser ? "Verification successful" : `Welcome back ${user.name || "User"}, continue your onboarding`,
             token,
             user,
             step: Number(nextStep)
@@ -464,9 +486,6 @@ export const saveBasicInfo = async (req, res) => {
     }
 };
 
-
-
-
 // step -3
 export const saveAddress = async (req, res) => {
     try {
@@ -517,8 +536,6 @@ export const saveAddress = async (req, res) => {
         res.status(500).json({ success: false, message: err.message });
     }
 };
-
-
 
 // step -4
 export const saveBankDetails = async (req, res) => {
@@ -602,6 +619,13 @@ export const saveDocuments = async (req, res) => {
         validateFile(files?.aadhaarBack?.[0], "Aadhaar Back");
         validateFile(files?.shopLicense?.[0], "Shop License");
         validateFile(files?.cancelledCheque?.[0], "Cancelled Cheque");
+
+        if (!files.aadhaarFront || !files.aadhaarBack || !files.panCard || !files.shopLicense || !files.cancelledCheque) {
+            return res.status(400).json({
+                success: false,
+                message: "All required documents are required"
+            });
+        }
 
         if (seller.businessType !== "individual") {
             validateFile(files?.gstCertificate?.[0], "GST Certificate");
@@ -991,17 +1015,16 @@ export const sellerKycAction = async (req, res) => {
             {
                 $set: {
                     kycStatus: action,
-                    isApproved: action === "verified",
-                    status: action === "verified" ? "active" : "suspended",
                     kycVerifiedAt: action === "verified" ? new Date() : null,
                     kycRejectedAt: action === "rejected" ? new Date() : null,
-                    rejectionReason: action === "rejected" ? rejectionReason : null
+                    rejectionReason: action === "rejected" ? rejectionReason : null,
+                    kycStep: action === "verified" ? 5 : 1
                 }
             },
             {
                 new: true
             }
-        ).select("userId _id kycStatus isApproved status rejectionReason kycVerifiedAt kycRejectedAt").populate("userId", "_id name email").lean();
+        ).select("userId _id kycStatus status rejectionReason kycVerifiedAt kycRejectedAt kycStep").populate("userId", "_id name email").lean();
 
         if (!seller) {
             return res.status(400).json({
@@ -1023,8 +1046,8 @@ export const sellerKycAction = async (req, res) => {
 
         }
         await sendSellerEmail({
-            userName: seller.userId.name,
-            userEmail: seller.userId.email,
+            userName: seller.userId?.name,
+            userEmail: seller.userId?.email,
             templateId:
                 action === "verified"
                     ? "seller_kyc_approved"
