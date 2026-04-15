@@ -37,7 +37,8 @@ import Redis from "ioredis";
 let redis = null;
 
 if (process.env.REDIS_ENABLED === "true") {
-    redis = new Redis(process.env.REDIS_URL || {
+    redis = new Redis(
+        process.env.REDIS_URL || "redis://127.0.0.1:6379", {
         host: "127.0.0.1",
         port: 6379,
         enableOfflineQueue: true,
@@ -52,7 +53,7 @@ if (process.env.REDIS_ENABLED === "true") {
     });
 
     redis.on("connect", () => {
-        console.log("✅ Redis connected");
+        console.log("Redis connected");
     });
 
     redis.on("error", (err) => {

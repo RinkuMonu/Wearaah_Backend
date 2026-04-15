@@ -63,9 +63,9 @@ const userSchema = new mongoose.Schema(
         
         blockReason: {
             type: String,
-            required: function () {
-                return this.isActive === false
-            }
+            // required: function () {
+            //     return this.isActive === false
+            // }
         },
         sessionId: String,
         lastLogin: Date,

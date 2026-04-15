@@ -126,7 +126,8 @@ const sellerSchema = new mongoose.Schema(
             ]
         },
         kycStep: {
-            type: Number
+            type: Number,
+            default: 1
         },
         isTrustedSeller: {
             type: Boolean,
@@ -179,9 +180,6 @@ const sellerSchema = new mongoose.Schema(
 
             gstCertificate: {
                 type: String,
-                required: function () {
-                    return this.businessType !== "individual";
-                }
             },
 
             panCard: {
@@ -220,10 +218,6 @@ const sellerSchema = new mongoose.Schema(
             type: String,//shop name code UFG
             uppercase: true
         },
-        isApproved: {
-            type: Boolean,
-            default: false
-        },
 
         totalProducts: {
             type: Number,
@@ -252,11 +246,6 @@ const sellerSchema = new mongoose.Schema(
             default: 0
         },
 
-        status: {
-            type: String,
-            enum: ["active", "suspended", "blocked", "inprogress"],
-            default: "inprogress"
-        },
 
         isOnline: {
             type: Boolean,

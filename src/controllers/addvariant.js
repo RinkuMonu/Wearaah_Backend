@@ -2,8 +2,6 @@ import mongoose from "mongoose";
 import Product from "../models/product.model.js";
 import ProductVariant from "../models/productVariant.model.js";
 import Wishlist from "../models/wishlist.model.js";
-import { indexVariant } from "../config/productIndex.js";
-import client from "../config/elasticsearch.js";
 import reviewModel from "../models/review.model.js";
 
 /* =========================
@@ -340,16 +338,6 @@ export const addVariant = async (req, res) => {
           isNewVariantAdd: true,
         },
       });
-      const productForIndexing = await Product.findById(productId).select("name description brandId categoryId subCategoryId rating keywords")
-        .populate("brandId", "name")
-        .populate("categoryId", "name")
-        .populate("subCategoryId", "name");
-      await Promise.all(
-        createdVariants.map(v => indexVariant(v, productForIndexing))
-      );
-      // console.log("Created Variants:", createdVariants);
-      // console.log("Full Product:", product);
-      // return
       return res.status(201).json({
         success: true,
         message: "Variants added successfully",
@@ -533,13 +521,6 @@ export const updateVariant = async (req, res) => {
         { new: true },
       );
     }
-
-    const productForIndexing = await Product.findById(variant.productId).select("name description brandId categoryId subCategoryId rating keywords")
-      .populate("brandId", "name")
-      .populate("categoryId", "name")
-      .populate("subCategoryId", "name");
-    await indexVariant(updatedVariant, productForIndexing);
-
     return res.json({
       success: true,
       message: isOnlyStockUpdate
@@ -1005,100 +986,52 @@ export const deleteVariant = async (req, res) => {
 // global search
 
 export const globalSearch = async (req, res) => {
-  try {
-    const { q } = req.query;
-    console.log("Search query:", q);
-    if (!q) {
-      return res.status(400).json({
-        success: false,
-        message: "Search query required"
-      });
-    }
+  const { q } = req.query;
 
-    const result = await client.search({
-      index: "variants",
-      query: {
-        multi_match: {
-          query: q,
-          fields: [
-            "name",
-            "keywords^2",
-            "description",
-            "brand",
-            "category",
-            "SubCategory",
-            "color",
-            "size",
-          ],
-          fuzziness: "AUTO"
-        }
-      }
-    });
-    console.log("Elasticsearch search result:", result.hits?.hits);
+  const products = await Product.find({
+    $or: [
+      { name: { $regex: q, $options: "i" } },
+      { keywords: { $elemMatch: { $regex: q, $options: "i" } } }
+    ]
+  }).select("name keywords").limit(10);
 
-    const data = result.hits?.hits.map(item => item._source);
-
-    res.json({
-      success: true,
-      count: data.length,
-      data
-    });
-
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: error.message });
-  }
+  res.json({
+    success: true,
+    data: products
+  });
 };
 
 
-
 export const autoSuggest = async (req, res) => {
-  try {
-    const { q } = req.query;
+  const { q } = req.query;
 
-    if (!q || q.length < 2) {
-      return res.json({ success: true, data: [] });
+  const products = await Product.find({
+    $or: [
+      { keywords: { $elemMatch: { $regex: { q }, $options: "i" } } },
+      { name: { $regex: q, $options: "i" } },
+    ]
+  })
+    .select("name keywords")
+    .limit(6);
+
+  let suggestions = [];
+
+  products.forEach(p => {
+    const matchedKeywords = (p.keywords || []).filter(k =>
+      k.toLowerCase().includes(q.toLowerCase())
+    );
+
+    suggestions.push(...matchedKeywords);
+
+    if (p.name.toLowerCase().includes(q.toLowerCase())) {
+      suggestions.push(p.name);
     }
+  });
 
-    const result = await client.search({
-      index: "variants",
-      query: {
-        multi_match: {
-          query: q,
-          type: "bool_prefix",
-          fields: [
-            "keywords.suggest^4",      // 🔥 highest priority
-            "keywords.suggest._2gram",
-            "keywords.suggest._3gram",
+  const unique = [...new Set(suggestions)].slice(0, 6);
 
-            "name.suggest^2",
-            "name.suggest._2gram",
-            "name.suggest._3gram"
-          ]
-        }
-      }
-    });
-
-    const suggestions = result.hits.hits.flatMap(hit => {
-      const name = hit._source.name;
-      const keywords = hit._source.keywords || [];
-
-      return [
-        name,
-        ...keywords.filter(k =>
-          k.toLowerCase().includes(q.toLowerCase())
-        )
-      ];
-    });
-
-    const uniqueSuggestions = [...new Set(suggestions)];
-    res.json({
-      success: true,
-      data: uniqueSuggestions
-    });
-
-  } catch (error) {
-    // res.status(500).json({ message: error.message });
-    console.error(error);
-  }
+  return res.json({
+    success: true,
+    data: unique
+  });
 };
