@@ -44,7 +44,7 @@ export const isBothRole = async (req, res, next) => {
     if (role === "seller") {
       const seller = await sellerModal.findOne({ userId }).select("isApproved kycStatus");
 
-      if (!seller || seller.isApproved === false || seller.kycStatus === "pending") {
+      if (!seller || seller.kycStatus === "pending") {
         return res.status(403).json({
           code: "FORCE_LOGOUT",
           success: false,

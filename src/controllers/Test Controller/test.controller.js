@@ -1,22 +1,4 @@
-import client from "../../config/elasticsearch.js";
 import redis from "../../middlewares/redis.js";
-
-export const testElastic = async (_, res) => {
-    try {
-        const result = await client.info();
-
-        res.json({
-            success: true,
-            elastic: result
-        });
-
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
 
 export const testRedis = async (_, res) => {
     if (!redis) {

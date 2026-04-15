@@ -9,7 +9,6 @@
   "dependencies": {
     "@bull-board/api": "^6.20.6",
     "@bull-board/express": "^6.20.6",
-    "@elastic/elasticsearch": "^8.19.1",
     "axios": "^1.13.5",
     "bcryptjs": "^2.4.3",
     "bullmq": "^5.71.0",
