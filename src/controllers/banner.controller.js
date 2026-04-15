@@ -88,7 +88,7 @@ console.log(req.file);
 
 export const getBanners = async (req, res) => {
   try {
-    const { deviceType, position } = req.query;
+    const { deviceType, position, targetGender } = req.query;
 
     const filter = { isActive: true };
 
@@ -98,6 +98,10 @@ export const getBanners = async (req, res) => {
 
     if (position) {
       filter.position = position;
+    }
+
+    if (targetGender) {
+      filter.targetGender = targetGender;
     }
 
     const banners = await Banner.find(filter)

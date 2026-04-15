@@ -46,7 +46,7 @@ export const createOrder = async (req, res) => {
         {
           $inc: { superCoinBalance: -coinUsed },
         },
-       { new: true, session }
+        { new: true, session },
       );
       // ownerType: "customer",
       if (!wallet) {
@@ -262,10 +262,12 @@ export const createOrder = async (req, res) => {
     const order = new Order({
       customerId: req.user.id,
       sellerId,
+      sellerUserId:sellerId,
       items: orderItems,
       shippingAddress,
       paymentMethod,
       paymentStatus: gatewayAmount > 0 ? "pending" : "paid",
+      orderStatus: gatewayAmount > 0 ? "pending" : "placed",
       totalAmount,
       deliveryCharge,
       coinUsed,
@@ -294,8 +296,8 @@ export const createOrder = async (req, res) => {
           {
             headers: {
               Authorization: `Bearer ${process.env.FINUNIQUES_API_TOKEN}`,
-            }
-          }
+            },
+          },
         );
         gatewayResponse = gatwayAPI.data;
         console.log("payment gateway response >");
@@ -372,114 +374,139 @@ export const createOrder = async (req, res) => {
 };
 
 export const paymentCallback = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
   try {
+    console.log("📥 Payment callback received:", req.body);
+
     const data = req.body;
+    const orderNumber = data.orderId;
+    const isSuccess = data?.responseCode?.toString() === "100";
 
-    const order = await Order.findOne({ orderNumber: data.orderId }).session(
-      session,
+    // =========================
+    // ✅ STEP 1: ATOMIC UPDATE (IMPORTANT)
+    // =========================
+    const updatedOrder = await Order.findOneAndUpdate(
+      {
+        orderNumber: orderNumber,
+        paymentStatus: { $nin: ["paid", "failed"] }, // 🔥 prevents duplicate processing
+      },
+      {
+        $set: {
+          paymentStatus: isSuccess ? "paid" : "failed",
+          orderStatus: isSuccess ? "placed" : "cancelled",
+          settlementStatus: isSuccess ? "locked" : "order_cancelled",
+        },
+      },
+      { new: true }
     );
-    const WalletTransaction = await WalletTransactionModal.findOne({
-      referenceId: order._id,
-    }).session(session);
 
-    const Coin = await superCoin
-      .findOne({ orderId: order._id })
-      .session(session);
-
-    if (!order) throw new Error("Order not found");
-
-    // duplicate callback avoid
-    if (["paid", "failed"].includes(order.paymentStatus)) {
+    // 👉 Already processed (duplicate callback)
+    if (!updatedOrder) {
+      console.log("⚠️ Duplicate callback ignored");
       return res.json({ message: "Already processed" });
     }
+
+    console.log("✅ Order updated:", updatedOrder._id);
+
+    // =========================
+    // 🔍 Fetch related data
+    // =========================
+    const walletTxn = await WalletTransactionModal.findOne({
+      referenceId: updatedOrder._id,
+    });
+
+    const coin = await superCoin.findOne({
+      orderId: updatedOrder._id,
+    });
 
     // =========================
     // ✅ SUCCESS CASE
     // =========================
-    if (data?.responseCode?.toString() === "100") {
-      order.paymentStatus = "paid";
+    if (isSuccess) {
+      console.log("💰 Payment SUCCESS");
 
-      if (WalletTransaction) {
-        WalletTransaction.status = "completed";
-        await WalletTransaction.save({ session });
+      if (walletTxn) {
+        await WalletTransactionModal.updateOne(
+          { referenceId: updatedOrder._id },
+          { status: "completed" }
+        );
       }
 
-      if (Coin) {
-        Coin.status = "completed";
-        await Coin.save({ session });
+      if (coin) {
+        await superCoin.updateOne(
+          { orderId: updatedOrder._id },
+          { status: "completed" }
+        );
       }
 
-      await order.save({ session });
-      await session.commitTransaction();
       return res.json({ message: "Payment success handled" });
     }
 
     // =========================
     // ❌ FAILED CASE
     // =========================
-    if (data?.responseCode?.toString() !== "100") {
-      order.paymentStatus = "failed";
+    console.log("❌ Payment FAILED");
 
-      if (WalletTransaction) {
-        WalletTransaction.status = "failed";
-        await WalletTransaction.save({ session });
-      }
+    if (walletTxn) {
+      await WalletTransactionModal.updateOne(
+        { referenceId: updatedOrder._id },
+        { status: "failed" }
+      );
+    }
 
-      if (Coin) {
-        Coin.status = "failed";
-        await Coin.save({ session });
-      }
+    if (coin) {
+      await superCoin.updateOne(
+        { orderId: updatedOrder._id },
+        { status: "failed" }
+      );
+    }
 
-      await order.save({ session });
-      // 🔥 1. STOCK RETURN
-      const bulkOps = order.items.map((item) => ({
+    // =========================
+    // 🔥 1. STOCK RETURN
+    // =========================
+    if (updatedOrder.items?.length > 0) {
+      const variantBulk = updatedOrder.items.map((item) => ({
         updateOne: {
           filter: { _id: item.variantId },
           update: { $inc: { stock: item.quantity } },
         },
       }));
 
-      await ProductVariant.bulkWrite(bulkOps, { session });
+      await ProductVariant.bulkWrite(variantBulk);
 
-      const productBulk = order.items.map((item) => ({
+      const productBulk = updatedOrder.items.map((item) => ({
         updateOne: {
           filter: { _id: item.productId },
           update: { $inc: { saleCount: -item.quantity } },
         },
       }));
 
-      await Product.bulkWrite(productBulk, { session });
-
-      // 🔥 2. WALLET REFUND
-      if (order.walletUsed > 0) {
-        await walletSystemModal.updateOne(
-          { ownerId: order.customerId },
-          { $inc: { availableBalance: order.walletUsed } },
-          { session },
-        );
-      }
-
-      // 🔥 3. COIN REFUND
-      if (order.coinUsed > 0) {
-        await walletSystemModal.updateOne(
-          { ownerId: order.customerId },
-          { $inc: { superCoinBalance: order.coinUsed } },
-          { session },
-        );
-      }
-
-      await session.commitTransaction();
-
-      return res.json({ message: "Payment failed handled" });
+      await Product.bulkWrite(productBulk);
     }
+
+    // =========================
+    // 💸 2. WALLET REFUND
+    // =========================
+    if (updatedOrder.walletUsed > 0) {
+      await walletSystemModal.updateOne(
+        { ownerId: updatedOrder.customerId },
+        { $inc: { availableBalance: updatedOrder.walletUsed } }
+      );
+    }
+
+    // =========================
+    // 🪙 3. COIN REFUND
+    // =========================
+    if (updatedOrder.coinUsed > 0) {
+      await walletSystemModal.updateOne(
+        { ownerId: updatedOrder.customerId },
+        { $inc: { superCoinBalance: updatedOrder.coinUsed } }
+      );
+    }
+
+    return res.json({ message: "Payment failed handled" });
   } catch (error) {
-    await session.abortTransaction();
+    console.error("❌ Error in payment callback:", error);
     return res.status(500).json({ error: error.message });
-  } finally {
-    session.endSession();
   }
 };
 
