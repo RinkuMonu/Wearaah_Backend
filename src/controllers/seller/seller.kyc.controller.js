@@ -90,7 +90,7 @@ export const getAllSellers = async (req, res) => {
             .skip(skip)
             .limit(Number(limit))
             .lean();
-        console.log(sellers)
+        // console.log(sellers)
 
         const total = await sellerModal.countDocuments(filter);
 
