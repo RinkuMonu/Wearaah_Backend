@@ -34,8 +34,8 @@ const bannerSchema = new mongoose.Schema(
         "delivery",
         "sidebar",
         "footer",
-        "custom",
-      ], 
+        "custom", 
+      ],
       default: "homepage-top",
       index: true,
     },
@@ -66,7 +66,7 @@ const bannerSchema = new mongoose.Schema(
     endDate: Date,
     targetGender: {
       type: String,
-      enum: ["men", "women", "unisex", "all"],
+      enum: ["men", "women", "kids", "unisex", "all"],
       default: "all",
     },
 

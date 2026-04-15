@@ -20,11 +20,20 @@ const orderSchema = new mongoose.Schema(
       ref: "Rider",
       default: null
     },
+    riderUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null
+    },
 
     sellerId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Seller",
       required: true
+    },
+    sellerUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User"
     },
     sellerSnapshot: {
       sellerName: String,
@@ -164,15 +173,15 @@ const orderSchema = new mongoose.Schema(
 
     refundStatus: {
       type: String,
-      enum: ["pending", "processing", "completed"],
-      default: "pending"
+      enum: ["pending", "processing", "completed",""],
+      default: ""
     },
 
     isPaid: { type: Boolean, default: false },
 
     settlementStatus: {
       type: String,
-      enum: ["locked", "settled", "refunded"],
+      enum: ["locked", "settled", "refunded","order_cancelled"],
       default: "locked",
       index: true
     },
@@ -211,6 +220,7 @@ const orderSchema = new mongoose.Schema(
     paymentTransactionId: String,
     refundTransactionId: Date,
     sellerSettledAt: Date,
+ 
     riderSettledAt: Date,
   },
   { timestamps: true }
