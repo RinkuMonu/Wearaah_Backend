@@ -9,7 +9,8 @@ import {
   getUnseenOrders,
   markOrdersSeen,
   getAllOrders,
-  cancelOrder
+  cancelOrder,
+  paymentCallback
 } from "../controllers/order.controller.js";
 import { protect } from "../middlewares/auth.middleware.js";
 import { isBothRole, isSeller, isSuperAdmin } from "../middlewares/role.middleware.js";
@@ -18,6 +19,7 @@ const router = express.Router();
 
 // User
 router.post("/", protect, createOrder);
+router.post("/paymentCallback",paymentCallback);
 router.post("/cancelorder/:id", protect, cancelOrder);
 router.get("/my", protect, getOrders); // for web app customer
 router.get("/myAll", protect, isBothRole, getAllOrders); // admin and seller

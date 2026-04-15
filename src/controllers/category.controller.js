@@ -129,7 +129,7 @@ export const getCategories = async (req, res) => {
             .sort({ [sort]: -1 })
             .skip(skip)
             .limit(Number(limit))
-            .select("name slug description showOnHome isActive displayOrder smallimage bannerimage createdAt")
+            .select("name slug description showOnHome isActive displayOrder smallimage bannerimage createdAt gender")
             .lean();
 
         const total = await Category.countDocuments(filter);
