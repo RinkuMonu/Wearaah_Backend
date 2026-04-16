@@ -208,13 +208,24 @@ export const getsubCategoriesOnlyIdName = async (req, res) => {
 export const getSubCategoriesByCategory = async (req, res) => {
   try {
     const { categoryId } = req.params;
-    const {  gender } = req.query;
+    const { gender } = req.query;
 
-    const subcategories = await SubCategory.find({
-      categoryId: categoryId,
+    // base filter
+    let filter = {
+      categoryId,
       isActive: true,
-      gender: { $in: [gender] },
-    }).sort({ createdAt: -1 });
+    };
+
+    // add gender condition only if exists
+    if (gender) {
+      filter.gender = gender;
+      // OR agar multiple gender support karna ho:
+      // filter.gender = { $in: gender.split(",") };
+    }
+
+    const subcategories = await SubCategory.find(filter).sort({
+      createdAt: -1,
+    });
 
     return res.status(200).json({
       success: true,
